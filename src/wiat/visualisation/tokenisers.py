@@ -13,6 +13,7 @@ from tktkt.util.combinatorics import getLOCKey
 @timeit
 def visualiseCharsVersusTokensRelationships(tokeniser: TokeniserWithFiniteTypeDomain,
                                             raw_words: Iterable[str], counts: Dict[str, float]=None,
+                                            n_samples_per_word: int=1, do_tqdm: bool=False,
                                             do_measure_original_word_length: bool=False, exclude_words_over_length: int=100):
     """
     Produces the following histograms:
@@ -26,7 +27,7 @@ def visualiseCharsVersusTokensRelationships(tokeniser: TokeniserWithFiniteTypeDo
     and can be anywhere in [1, +infty[. For a histogram, a limited range to represent the same information makes more
     sense than an unlimited range.
 
-    TODO: Normalise graph (1) and (3) by the distribution of chars in the vocabulary.
+    TODO: Could normalise graph (1) and (3) by the distribution of chars in the vocabulary.
     """
     if counts is None:
         counts = dict()
@@ -34,33 +35,34 @@ def visualiseCharsVersusTokensRelationships(tokeniser: TokeniserWithFiniteTypeDo
     name = tokeniser.getName()
     FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = name
 
-    histo_chars_per_token = StreamingMultiHistogram("cpt-ratios", binspec=BinSpec.halfopen(minimum=1, width=1))
+    histo_chars_per_token     = StreamingMultiHistogram("cpt-ratios", binspec=BinSpec.halfopen(minimum=1, width=1))
     histo_tokens_per_char = VariableGranularityHistogram("tokens-per-char")
     histo_chars_across_tokens = StreamingMultiHistogram("chars-in-tokens", binspec=BinSpec.halfopen(minimum=1, width=1))
-    histo_chars_across_types = StreamingMultiHistogram("chars-in-types", binspec=BinSpec.halfopen(minimum=1, width=1))
+    histo_chars_across_types  = StreamingMultiHistogram("chars-in-types", binspec=BinSpec.halfopen(minimum=1, width=1))
 
     for t in tokeniser.types():
         histo_chars_across_types.add(name, len(t))
 
-    for raw_word in tqdm(raw_words):
+    for raw_word in tqdm(raw_words) if do_tqdm else raw_words:
         n_raw_chars = len(raw_word)
         if n_raw_chars > exclude_words_over_length:
             continue
 
-        tokens = tokeniser.prepareAndTokenise(raw_word)
-        n_token_chars = sum(map(len, tokens))
+        for _ in range(n_samples_per_word):
+            tokens = tokeniser.prepareAndTokenise(raw_word)
+            n_token_chars = sum(map(len, tokens))
 
-        n_chars = n_raw_chars if do_measure_original_word_length else n_token_chars
-        n_tokens = len(tokens)
-        char_to_token_ratio = n_chars/n_tokens
+            n_chars = n_raw_chars if do_measure_original_word_length else n_token_chars
+            n_tokens = len(tokens)
+            char_to_token_ratio = n_chars/n_tokens
 
-        # f_w = counts.get(raw_word, 1)  # Frequency is unsupported by Fiject, currently.
+            # f_w = counts.get(raw_word, 1)  # Frequency is unsupported by Fiject, currently.
 
-        # Add to histograms
-        histo_chars_per_token.add(name, char_to_token_ratio)
-        histo_tokens_per_char.add(n_tokens-1, n_token_chars)  # You can have 1 ... n_chars tokens. The interface requires the first argument to be in 0 ... n-1 (which makes sense, otherwise the first bin would never be added to and the first bin changes size depending on n_chars).
-        for token in tokens:
-            histo_chars_across_tokens.add(name, len(token))
+            # Add to histograms
+            histo_chars_per_token.add(name, char_to_token_ratio)
+            histo_tokens_per_char.add(n_tokens-1, n_token_chars)  # You can have 1 ... n_chars tokens. The interface requires the first argument to be in 0 ... n-1 (which makes sense, otherwise the first bin would never be added to and the first bin changes size depending on n_chars).
+            for token in tokens:
+                histo_chars_across_tokens.add(name, len(token))
 
     histo_chars_per_token.commit(StreamingMultiHistogram.ArgsGlobal(
         x_label="Characters-per-token ratio",
@@ -119,7 +121,7 @@ def visualiseSingleWordSegmentationDistribution(tokeniser: Tokeniser, word: str,
            In other words, the sum of the above Bernoulli variables, and hence a binomial distribution.
            TODO: You could reweight this by a binomial distribution that assumes p = 0.5, proportional to |w|-choose-x, to correct
                  for the fact that e.g. |w|/2 should dominate because there are more ways to form |w|/2 tokens from |w| characters
-                 than any other amount of tokens.
+                 than any other amount of tokens. Or, instead of reweighting, you could turn it into a Q-Q plot :)
         4. For a given word, on the x-axis all |w| possible lengths of tokens, and on the y-axis the amount of times
            such a token is produced across all experiments.
         5. For a given word, the distribution of characters-per-token ratios across all samples. Has the same shape as
@@ -130,6 +132,8 @@ def visualiseSingleWordSegmentationDistribution(tokeniser: Tokeniser, word: str,
     We only do one word at a time because especially histogram (1) cannot be combined across multiple words since the
     distribution of lengths across segmentations (both token lengths and token amounts) is not proportioned the same
     for different lengths of words.
+
+    ---
 
     The ordering on the x-axis of histogram (1) is quite tricky. What we want to show with our graphs is that there is
     a skew towards small tokens. This concept is hard to define formally: if you order the segmentations by amount of tokens,
@@ -168,7 +172,7 @@ def visualiseSingleWordSegmentationDistribution(tokeniser: Tokeniser, word: str,
            histo_across_char_per_token_ratio.needs_computation:
         split_heatmap = [0] * (n_chars - 1)
 
-        for _ in tqdm(range(samples)):
+        for _ in tqdm(range(samples), smoothing=0.1):
             tokens = tokeniser.prepareAndTokenise(word)
             assert sum(map(len, tokens)) == n_chars  # Basically asserts that the tokeniser is non-degenerate.
 
@@ -245,52 +249,3 @@ def getSegmentationMask(tokens: List[str]) -> List[int]:
 
 def getSegmentationBitstring(tokens: List[str]) -> str:
     return "".join(intercalate(map(lambda i: (i-1)*"0", map(len, tokens)), "1"))
-
-
-########################################################################################################################
-
-
-def test_1():
-    from tktkt.builders.english import Builder_English_BPE
-    from bpe_knockout import morphologyGenerator
-
-    tk = Builder_English_BPE().buildTokeniser()
-
-    visualiseCharsVersusTokensRelationships(
-        tokeniser=tk,
-        raw_words=(o.word for o in morphologyGenerator()),
-    )
-
-
-def test_2():
-    from tktkt.preparation.instances import CommonsensePreprocessor, RobertaSpaceMarker
-    from tktkt.models.random.pathmarkov import RandomVocabSegmentation_GreedyMarkov, PowerNormalisation
-
-    from transformers import AutoTokenizer
-
-    for temperature in [1.0, 1.025, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]:
-    # for temperature in [1.0, 1.025, 1.05, 1.1, 1.15, 1.2, 1.25]:
-        tk = RandomVocabSegmentation_GreedyMarkov(
-            preprocessor=CommonsensePreprocessor(RobertaSpaceMarker),
-            vocab=AutoTokenizer.from_pretrained("roberta-base").get_vocab(),
-
-            minimal_token_length=1,
-            decode_backwards=True,
-            probabilities_to_probabilities=PowerNormalisation(temperature=temperature)
-        )
-
-        # Infinite domain so that we can measure the effect of temperature in a histogram with LOC ordering without weird shit.
-        tk.enableInfiniteDomain(True)
-
-        word = "antidisestablishmentarianism"
-        visualiseSingleWordSegmentationDistribution(
-            tokeniser=tk,
-            word=word,
-            samples=500_000,
-            segmentation_histogram_max_bins=2**9,
-            do_bitbased_ordering=False
-        )
-
-
-if __name__ == "__main__":
-    test_2()
