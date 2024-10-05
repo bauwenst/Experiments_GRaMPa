@@ -81,4 +81,5 @@ def main_GRaMPa_corpus(unconstrained: bool = True):
 
 if __name__ == "__main__":
     # main_GRaMPa_word(unconstrained=False)
-    main_BPE_corpus()
+    # main_BPE_corpus()
+    main_GRaMPa_corpus(unconstrained=False)
