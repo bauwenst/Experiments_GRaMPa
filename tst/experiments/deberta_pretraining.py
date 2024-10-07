@@ -1,5 +1,7 @@
 from tst.preamble import *
 
+from transformers import PreTrainedTokenizerBase
+
 from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, DebertaConfig
 
 from wiat.training.archit_base import DebertaBaseModel
@@ -8,7 +10,7 @@ from lamoto.tasks.mlm import MaskedLMHeadConfig
 from tktkt.util.environment import IS_LINUX
 
 
-def deberta_pretraining():
+def deberta_pretraining(tk: PreTrainedTokenizerBase):
     hp = SUGGESTED_HYPERPARAMETERS_MLM
 
     hp.SEED = 69420
@@ -23,8 +25,8 @@ def deberta_pretraining():
     hp.custom_hf_class = DebertaForMaskedLM  # Although this class cannot correctly load the Microsoft checkpoints, it can train and load checkpoints from scratch.
     hp.MODEL_CONFIG_OR_CHECKPOINT = DebertaConfig.from_pretrained("microsoft/deberta-base")  # TODO: Configure this.
 
-    # Tokeniser  TODO: Make sure you have specials loaded in here.
-    hp.TOKENISER =
+    # Tokeniser
+    hp.TOKENISER = tk
 
     # Device-specific
     if IS_LINUX:
@@ -42,9 +44,11 @@ def deberta_pretraining():
     hp.EXAMPLES_PER_EVALUATION = 2**14  # Two times the amount of data processed for one descent.
 
     ###
-    task = MLM_SlimPajama()
+    task = MLM_SlimPajama(truncate_train_split_to=100_000)
     task.train(hp)
 
 
 if __name__ == "__main__":
-    deberta_pretraining()
+    from tktkt.interfaces.huggingface import TktktToHuggingFace
+    from tst.experiments.tokenisers_instances import createTokeniser_SwitchyGrampa_ULM
+    deberta_pretraining(TktktToHuggingFace(createTokeniser_SwitchyGrampa_ULM()))

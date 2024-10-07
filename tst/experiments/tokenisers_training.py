@@ -2,17 +2,18 @@ from tst.preamble import *
 
 from datasets import load_dataset, IterableDataset, IterableDatasetDict
 from tktkt.util.timing import datetimeDashed
+from tktkt.util.environment import IS_LINUX
 from tktkt.preparation.instances import *
 from tktkt.models.bpe.vocabularisation import BPEVocabulariser, BpeTrainerImplementation
 from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceArguments_Algorithm, KudoPieceArguments_Alphabet
 
-DUMMY_CORPUS = False
-if DUMMY_CORPUS:
-    CORPUS_SIZE = 10_000
-    CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")
-else:
+
+if IS_LINUX:
     CORPUS_SIZE = 500_000  # For BPEasy, my RAM runs out at 898 304 which is the 5hr22min mark. At 750k, it can load everything, but eats 100% of RAM after that. For Unigram, it is able to load 750k, but then after a while crashes silently with an (0xC0000409) error.
     CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
+else:
+    CORPUS_SIZE = 1000
+    CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")
 
 
 VOCAB_SIZE = 32768
@@ -83,3 +84,5 @@ if __name__ == "__main__":
     except:
         print("BPE crashed.")
         pass
+
+    import bpe_knockout

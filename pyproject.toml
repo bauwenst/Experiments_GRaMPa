@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wiat"
-version = "2024.09.01"
+version = "2024.10.01"
 description = "WiaT: What's in a token? Experiments to figure out if language models know characters, and how to make them do so."
 keywords = ["tokenization", "NLP"]
 
@@ -23,7 +23,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "datasets"
+    "datasets",
+    "zstandard"  # Needed for SlimPajama dataset. HuggingFace won't tell you, of course. Instead, SentencePiece will complain that your corpus has 0 sentences.
 ]
 
 [project.optional-dependencies]

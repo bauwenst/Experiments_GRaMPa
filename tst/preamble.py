@@ -11,4 +11,4 @@ from tktkt import setTkTkToutputRoot
 from tktkt.files.paths import PathManager
 
 setTkTkToutputRoot(PATH_DATA_OUT)
-PATHS = PathManager("wiat")
+WiatPaths = PathManager("wiat")
