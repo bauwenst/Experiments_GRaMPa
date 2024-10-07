@@ -7,7 +7,7 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig
-from tktkt.util.environment import IS_LINUX
+from tktkt.util.environment import IS_NOT_LINUX
 
 
 def deberta_pretraining(tk: PreTrainedTokenizerBase):
@@ -29,11 +29,11 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase):
     hp.TOKENISER = tk
 
     # Device-specific
-    if IS_LINUX:
+    if IS_NOT_LINUX:
+        hp.EXAMPLES_PER_DEVICEBATCH = 64  # TODO: Adjust to your liking.
+    else:
         hp.WANDB_PROJECT = "wiat"
         hp.EXAMPLES_PER_DEVICEBATCH = 64  # Should definitely fit on an A100.
-    else:
-        hp.EXAMPLES_PER_DEVICEBATCH = 64  # TODO: Adjust to your liking.
 
     # Training parameters
     hp.LEARNING_RATE = 5e-3  # DeBERTa uses 2e-4. I use 20x that because small learning rates are dangerous.

@@ -10,7 +10,7 @@ from tktkt.models.random.pathmarkov import RandomVocabSegmentation_GreedyMarkov,
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.util.types import NamedIterable
 from tktkt.util.printing import wprint
-from tktkt.util.environment import IS_LINUX
+from tktkt.util.environment import IS_NOT_LINUX
 
 from fiject import LineGraph, CacheMode
 
@@ -123,7 +123,10 @@ def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
 
 
 if __name__ == "__main__":
-    if IS_LINUX:
+    if IS_NOT_LINUX:
+        main_multiplex(bpe_not_ulm=True)
+        main_multiplex(bpe_not_ulm=False)
+    else:
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument("--bpe", default=False, action="store_true")
@@ -131,6 +134,3 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         main_multiplex(bpe_not_ulm=args.bpe, temperature=args.tau)
-    else:
-        main_multiplex(bpe_not_ulm=True)
-        main_multiplex(bpe_not_ulm=False)

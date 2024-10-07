@@ -3,20 +3,20 @@ from tst.preamble import *
 from datasets import load_dataset, IterableDataset, IterableDatasetDict
 
 from tktkt.util.timing import datetimeDashed
-from tktkt.util.environment import IS_LINUX
+from tktkt.util.environment import IS_NOT_LINUX
 from tktkt.preparation.instances import *
 from tktkt.models.bpe.vocabularisation import BPEVocabulariser, BpeTrainerImplementation
 from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceArguments_Algorithm, KudoPieceArguments_Alphabet
 
 
-if IS_LINUX:
-    TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
-    VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
-    CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
-else:
+if IS_NOT_LINUX:
     TRAINING_CORPUS_SIZE = 5000
     VALIDATION_CORPUS_SIZE = 1000
     CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")
+else:
+    TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
+    VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
+    CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
 
 
 VOCAB_SIZE = 32768
