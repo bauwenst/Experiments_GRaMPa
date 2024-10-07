@@ -123,10 +123,11 @@ def main_temperature(bpe_not_ulm: bool):
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
 
-    # Get grid
-    equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19.
-    powers = np.log(1-equally_spaced_points)/np.log(equally_spaced_points)
-    temperatures = 1/powers
+    # Get grid (the original grid was made such that the x^{alpha} curves intersected 1-x at equally spaced points, but the Renyi efficiency basically stayed constant)
+    # equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19.
+    # powers = np.log(1-equally_spaced_points)/np.log(equally_spaced_points)
+    # temperatures = 1/powers
+    temperatures = np.linspace(1.0, 2.0, 21)  # We know that inside this range, the segmentation distribution goes from uniform to skewing massively. Temperatures after 2 are probably irrelevant.
 
     # Call search
     print("Best temperature and its efficiency:", searchTemperatures(
@@ -199,14 +200,14 @@ if __name__ == "__main__":
         parser.add_argument("--experiment_alpha",       default=False, action="store_true")
 
         # Arguments that only hold for multiplexing
-        parser.add_argument("--multiplex_bpe", default=False, action="store_true")
-        parser.add_argument("--multiplex_fixed_temp", default=1.0, type=float)
+        parser.add_argument("--bpe_vocab", default=False, action="store_true")
+        parser.add_argument("--fixed_temp", default=1.0, type=float)
 
         args = parser.parse_args()
         if args.experiment_multiplex:
-            main_multiplex(bpe_not_ulm=args.bpe, temperature=args.multiplex_fixed_temp)
+            main_multiplex(bpe_not_ulm=args.bpe_vocab, temperature=args.fixed_temp)
         elif args.experiment_temperature:
-            main_temperature(bpe_not_ulm=args.bpe)
+            main_temperature(bpe_not_ulm=args.bpe_vocab)
         elif args.experiment_alpha:
             main_alphas()
         else:
