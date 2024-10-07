@@ -30,12 +30,12 @@ def createTokeniser_Grampa(preprocessor: Preprocessor, vocab: Vocab) -> RandomVo
 
 
 def createTokeniser_SwitchyGrampa_ULM() -> StochasticTokeniserSwitch:
-    tk_path = TkTkTPaths.pathToModels() / "kudopiece" / "kudopiece_slim_pajama-627_b_3M_2024-10-06_11-26-39"
+    tk_path = TkTkTPaths.pathToModels() / "kudopiece" / "kudopiece_slim_pajama-627_b_2024-10-06_11-26-39"
     vocab = KudoPieceTrainer.load(tk_path, existing_types=DEFAULT_FIVE_SPECIALS.all_special_tokens)
 
     global_preprocessor = Preprocessor(TruncateAndNormalise(TRUNCATE_INPUT_AFTER), IdentityMapper(), TraditionalPretokeniser())
     preprocessor1 = SentencePiecePreprocessor(marker=MARKER, prefix_space_already_added=True)  # Marker is only used for its location. I fucked up and set add_prefix to True when training the tokeniser, and now that option is baked into the .model file LMAO.
-    preprocessor2 = ModernEnglishPreprocessor(marker=KudoSpaceMarker)
+    preprocessor2 = ModernEnglishPreprocessor(marker=KudoSpaceMarker, truncate_text_after_chars=TRUNCATE_INPUT_AFTER)
     return StochasticTokeniserSwitch(
         preprocessor=MultiplexedPreprocessor(
             global_preprocessor=global_preprocessor,
@@ -48,12 +48,12 @@ def createTokeniser_SwitchyGrampa_ULM() -> StochasticTokeniserSwitch:
 
 
 def createTokeniser_SwitchyGrampa_BPE() -> StochasticTokeniserSwitch:
-    tk_path = TkTkTPaths.pathToModels() / "bpe" / "bpe_slim_pajama-627_b_3M_2024-10-06_02-40-55"
+    tk_path = TkTkTPaths.pathToModels() / "bpe" / "bpe_slim_pajama-627_b_2024-10-06_02-40-55"
     vocab  = BPEVocabulariser.load(tk_path, existing_types=DEFAULT_FIVE_SPECIALS.all_special_tokens)
     merges = BPEVocabulariser.loadMerges(tk_path)
 
     global_preprocessor = Preprocessor(TruncateAndNormalise(TRUNCATE_INPUT_AFTER), IdentityMapper(), TraditionalPretokeniser())
-    sub_preprocessor = ModernEnglishPreprocessor(marker=MARKER)
+    sub_preprocessor = ModernEnglishPreprocessor(marker=MARKER, truncate_text_after_chars=TRUNCATE_INPUT_AFTER)
 
     hf = HuggingFaceBPETokeniser(vocab, merges, dropout=0.0, preprocessor=sub_preprocessor)
     return StochasticTokeniserSwitch(

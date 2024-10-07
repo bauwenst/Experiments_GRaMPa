@@ -1,6 +1,7 @@
 from tst.preamble import *
 
 from datasets import load_dataset, IterableDataset, IterableDatasetDict
+
 from tktkt.util.timing import datetimeDashed
 from tktkt.util.environment import IS_LINUX
 from tktkt.preparation.instances import *
@@ -9,10 +10,12 @@ from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceA
 
 
 if IS_LINUX:
-    CORPUS_SIZE = 500_000  # For BPEasy, my RAM runs out at 898 304 which is the 5hr22min mark. At 750k, it can load everything, but eats 100% of RAM after that. For Unigram, it is able to load 750k, but then after a while crashes silently with an (0xC0000409) error.
+    TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
+    VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
     CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
 else:
-    CORPUS_SIZE = 1000
+    TRAINING_CORPUS_SIZE = 5000
+    VALIDATION_CORPUS_SIZE = 1000
     CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")
 
 
@@ -20,7 +23,7 @@ VOCAB_SIZE = 32768
 MARKER = RobertaSpaceMarker
 MAX_LENGTH = 32
 
-def loadCorpus(corpus_id: Tuple[str,...], cache=dict()) -> Tuple[IterableDatasetDict, IterableDataset]:
+def loadCorpus(corpus_id: Tuple[str,...], cache=dict()) -> Tuple[IterableDatasetDict, IterableDataset, IterableDataset]:
     """
     Load the corpus lazily and then keep the references to the iterables for if you need to do it again later.
     """
@@ -29,12 +32,15 @@ def loadCorpus(corpus_id: Tuple[str,...], cache=dict()) -> Tuple[IterableDataset
 
     print(datetimeDashed(), "Loading lazy corpus...")
     corpus_splits: IterableDatasetDict = load_dataset(*corpus_id, streaming=True, trust_remote_code=True)
-    train_corpus: IterableDataset = corpus_splits["train"]
-    train_corpus: IterableDataset = train_corpus.take(CORPUS_SIZE)
-    print(datetimeDashed(), "Finished loading.", CORPUS_SIZE, "sentences will be used for training.")
+    print(datetimeDashed(), "Finished loading. Taking sizes", (TRAINING_CORPUS_SIZE, VALIDATION_CORPUS_SIZE))
 
-    cache[corpus_id] = (corpus_splits, train_corpus)
-    return corpus_splits, train_corpus
+    train_corpus: IterableDataset = corpus_splits["train"]
+    train_corpus: IterableDataset = train_corpus.take(TRAINING_CORPUS_SIZE)
+    valid_corpus: IterableDataset = corpus_splits["validation"]
+    valid_corpus: IterableDataset = valid_corpus.take(VALIDATION_CORPUS_SIZE)
+
+    cache[corpus_id] = (corpus_splits, train_corpus, valid_corpus)
+    return corpus_splits, train_corpus, valid_corpus
 
 
 def trainBPE():
@@ -49,7 +55,7 @@ def trainBPE():
     vocabulariser = BPEVocabulariser(preprocessor=preprocessor, implementation=imp,
                                      boundary_marker=MARKER, byte_based=True,
                                      vocab_size=VOCAB_SIZE, max_length=MAX_LENGTH)
-    _, train_corpus = loadCorpus(CORPUS_ID)
+    _, train_corpus, _ = loadCorpus(CORPUS_ID)
     vocabulariser.vocabulariseFromHf(train_corpus, text_field="text")
 
 
@@ -69,7 +75,7 @@ def trainKudo():
             skip_sentences_over_length=2**13
         )
     )
-    _, train_corpus = loadCorpus(CORPUS_ID)
+    _, train_corpus, _ = loadCorpus(CORPUS_ID)
     vocabulariser.vocabulariseFromHf(train_corpus, text_field="text")
 
 
@@ -84,5 +90,3 @@ if __name__ == "__main__":
     except:
         print("BPE crashed.")
         pass
-
-    import bpe_knockout
