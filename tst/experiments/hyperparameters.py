@@ -174,7 +174,7 @@ def main_alphas():
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
 
     # Get grid
-    equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19.
+    equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19. The resulting alphas have equally spaced intersections with 1-x, i.e. the curves are equally "spread out".
     alphas = np.log(1-equally_spaced_points)/np.log(equally_spaced_points)
 
     # Call search

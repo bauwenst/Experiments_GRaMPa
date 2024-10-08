@@ -23,7 +23,8 @@ VOCAB_SIZE = 32768
 MARKER = RobertaSpaceMarker
 MAX_LENGTH = 32
 
-def loadCorpus(corpus_id: Tuple[str,...], cache=dict()) -> Tuple[IterableDatasetDict, IterableDataset, IterableDataset]:
+def loadCorpus(corpus_id: Tuple[str,...], train_size: int=TRAINING_CORPUS_SIZE, validation_size: int=VALIDATION_CORPUS_SIZE,
+               cache=dict()) -> Tuple[IterableDatasetDict, IterableDataset, IterableDataset]:
     """
     Load the corpus lazily and then keep the references to the iterables for if you need to do it again later.
     """
@@ -32,12 +33,12 @@ def loadCorpus(corpus_id: Tuple[str,...], cache=dict()) -> Tuple[IterableDataset
 
     print(datetimeDashed(), "Loading lazy corpus...")
     corpus_splits: IterableDatasetDict = load_dataset(*corpus_id, streaming=True, trust_remote_code=True)
-    print(datetimeDashed(), "Finished loading. Taking sizes", (TRAINING_CORPUS_SIZE, VALIDATION_CORPUS_SIZE))
+    print(datetimeDashed(), "Finished loading. Taking sizes", (train_size, validation_size))
 
     train_corpus: IterableDataset = corpus_splits["train"]
-    train_corpus: IterableDataset = train_corpus.take(TRAINING_CORPUS_SIZE)
+    train_corpus: IterableDataset = train_corpus.take(train_size)
     valid_corpus: IterableDataset = corpus_splits["validation"]
-    valid_corpus: IterableDataset = valid_corpus.take(VALIDATION_CORPUS_SIZE)
+    valid_corpus: IterableDataset = valid_corpus.take(validation_size)
 
     cache[corpus_id] = (corpus_splits, train_corpus, valid_corpus)
     return corpus_splits, train_corpus, valid_corpus
