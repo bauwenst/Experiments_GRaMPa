@@ -1,5 +1,5 @@
 from tst.preamble import *
-from tst.experiments.tokenisers_instances import createTokeniser_SwitchyGrampa_BPE, createTokeniser_SwitchyGrampa_ULM
+from tst.experiments.tokenisers_instances import *
 from tst.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from typing import Iterable, Tuple
@@ -114,9 +114,9 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
 def main_temperature(bpe_not_ulm: bool):
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE()
+        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0)
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM()
+        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0)
     grampa = switch.subtokenisers[1]
     assert isinstance(grampa, RandomVocabSegmentation_GreedyMarkov)
 
@@ -140,9 +140,9 @@ def main_temperature(bpe_not_ulm: bool):
 def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE()
+        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0)
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM()
+        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0)
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
@@ -166,9 +166,7 @@ def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
 
 def main_alphas():
     # Get tokeniser
-    switch = createTokeniser_SwitchyGrampa_ULM()
-    kudo = switch.subtokenisers[0]
-    assert isinstance(kudo, KudoPieceTokeniser)
+    kudo = Build_English_Kudo(kbest=64, alpha=0).buildTokeniser()
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)

@@ -11,8 +11,9 @@ from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceA
 
 if IS_NOT_LINUX:
     TRAINING_CORPUS_SIZE = 5000
-    VALIDATION_CORPUS_SIZE = 1000
-    CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")
+    VALIDATION_CORPUS_SIZE = 500
+    # CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")  # Has no validation split
+    CORPUS_ID = ("allenai/c4", "en")
 else:
     TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
     VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
@@ -34,6 +35,7 @@ def loadCorpus(corpus_id: Tuple[str,...], train_size: int=TRAINING_CORPUS_SIZE, 
     print(datetimeDashed(), "Loading lazy corpus...")
     corpus_splits: IterableDatasetDict = load_dataset(*corpus_id, streaming=True, trust_remote_code=True)
     print(datetimeDashed(), "Finished loading. Taking sizes", (train_size, validation_size))
+    print(corpus_splits)
 
     train_corpus: IterableDataset = corpus_splits["train"]
     train_corpus: IterableDataset = train_corpus.take(train_size)

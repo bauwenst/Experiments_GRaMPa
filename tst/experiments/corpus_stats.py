@@ -23,7 +23,7 @@ def histogramOfTokenCounts():
     Generate a histogram of the amount of BPE tokens to expect per example in the dataset.
     """
     # Load tokeniser
-    tk = createTokeniser_SwitchyGrampa_BPE().subtokenisers[0]
+    tk = createTokeniser_SwitchyGrampa_BPE(dropout=0.0).subtokenisers[0]
 
     # Graphing
     db_name = '/'.join(CORPUS_ID).replace('/', '-')

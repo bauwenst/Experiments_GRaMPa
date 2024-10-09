@@ -34,6 +34,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase):
     else:
         hp.WANDB_PROJECT = "wiat"
         hp.EXAMPLES_PER_DEVICEBATCH = 64  # Should definitely fit on an A100.
+        hp.EXAMPLES_PER_EFFECTIVE_BATCH = 2048  # As in DeBERTa paper and also the best in the RoBERTa paper.
 
     # Training parameters
     hp.LEARNING_RATE = 5e-3  # DeBERTa uses 2e-4. I use 20x that because small learning rates are dangerous.
@@ -51,4 +52,4 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase):
 if __name__ == "__main__":
     from tktkt.interfaces.huggingface import TktktToHuggingFace
     from tst.experiments.tokenisers_instances import createTokeniser_SwitchyGrampa_ULM
-    deberta_pretraining(TktktToHuggingFace(createTokeniser_SwitchyGrampa_ULM()))
+    deberta_pretraining(TktktToHuggingFace(createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0)))
