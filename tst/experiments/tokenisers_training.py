@@ -65,6 +65,7 @@ def trainBPE():
 def trainKudo():
     """
     Takes about an hour to get through a 750k corpus (250 it/s => 3k seconds).
+    Very high memory consumption (80 GiB per million sentences).
     """
     vocabulariser = KudoPieceTrainer(
         preprocessor=SentencePiecePreprocessor(marker=MARKER),
@@ -83,13 +84,5 @@ def trainKudo():
 
 
 if __name__ == "__main__":
-    try:
-        trainKudo()
-    except:
-        print("Kudo crashed.")
-        pass
-    try:
-        trainBPE()
-    except:
-        print("BPE crashed.")
-        pass
+    trainBPE()
+    trainKudo()

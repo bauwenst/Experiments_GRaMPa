@@ -1,9 +1,6 @@
 from tst.preamble import *
 from tst.experiments.tokenisers_training import MARKER
 
-from typing import Tuple
-from transformers import PreTrainedTokenizerBase, AutoTokenizer
-
 from tktkt.interfaces import Preprocessor, Vocab
 from tktkt.preparation.instances import ModernEnglishPreprocessor, RobertaSpaceMarker, KudoSpaceMarker, \
     SentencePiecePreprocessor, IdentityPreprocessor, TraditionalPretokeniser, TruncateAndNormalise, IdentityMapper, BoundaryMarker
@@ -40,7 +37,7 @@ class Build_GRaMPa(TokeniserBuilder[RandomVocabSegmentation_GreedyMarkov]):
         )
 
 
-class Build_English_BPE(TokeniserBuilder[RandomVocabSegmentation_GreedyMarkov]):
+class Build_English_BPE(TokeniserBuilder[HuggingFaceBPETokeniser]):
     """
     Defaults to the 32k SlimPajama vocab.
     """
@@ -95,13 +92,17 @@ class Build_English_Kudo(TokeniserBuilder[KudoPieceTokeniser]):
         )
 
 
-def createTokeniser_SwitchyGrampa_ULM(kbest: int=1, smoothing_power: float=1.0) -> StochasticTokeniserSwitch:
+def createTokeniser_SwitchyGrampa_ULM(p: float=0.5,
+                                      t: float=1.0, l: int=1,
+                                      kbest: int=1, smoothing_power: float=1.0) -> StochasticTokeniserSwitch:
     global_preprocessor = Preprocessor(TruncateAndNormalise(TRUNCATE_INPUT_AFTER), IdentityMapper(), TraditionalPretokeniser())
 
     tk1 = Build_English_Kudo(kbest=kbest, alpha=smoothing_power).buildTokeniser()
     tk2 = Build_GRaMPa(
         preprocessor=ModernEnglishPreprocessor(marker=KudoSpaceMarker, truncate_text_after_chars=TRUNCATE_INPUT_AFTER),
-        vocab=tk1.vocab
+        vocab=tk1.vocab,
+        minimal_length=l,
+        temperature=t
     ).buildTokeniser()
 
     return StochasticTokeniserSwitch(
@@ -111,17 +112,19 @@ def createTokeniser_SwitchyGrampa_ULM(kbest: int=1, smoothing_power: float=1.0) 
         ),
         tokeniser1=tk1,
         tokeniser2=tk2,
-        p=0.5  # TODO: Comes from hyperparameter search.
+        p=p
     )
 
 
-def createTokeniser_SwitchyGrampa_BPE(dropout: float=0.0) -> StochasticTokeniserSwitch:
+def createTokeniser_SwitchyGrampa_BPE(p: float=0.5,
+                                      t: float=1.0, l: int=1,
+                                      dropout: float=0.0) -> StochasticTokeniserSwitch:
     global_preprocessor = Preprocessor(TruncateAndNormalise(TRUNCATE_INPUT_AFTER), IdentityMapper(), TraditionalPretokeniser())
     sub_preprocessor = ModernEnglishPreprocessor(marker=MARKER, truncate_text_after_chars=TRUNCATE_INPUT_AFTER)
 
     build1 = Build_English_BPE(preprocessor=sub_preprocessor, dropout=dropout)
     tk1 = build1.buildTokeniser()
-    tk2 = Build_GRaMPa(preprocessor=sub_preprocessor, vocab=build1.vocab).buildTokeniser()
+    tk2 = Build_GRaMPa(preprocessor=sub_preprocessor, vocab=build1.vocab, minimal_length=l, temperature=t).buildTokeniser()
     return StochasticTokeniserSwitch(
         preprocessor=MultiplexedPreprocessor(
             global_preprocessor=global_preprocessor,
@@ -129,12 +132,12 @@ def createTokeniser_SwitchyGrampa_BPE(dropout: float=0.0) -> StochasticTokeniser
         ),
         tokeniser1=tk1,
         tokeniser2=tk2,
-        p=0.5  # TODO: Comes from hyperparameter search.
+        p=p
     )
 
 
 if __name__ == "__main__":
-    switch = createTokeniser_SwitchyGrampa_BPE()
+    switch = createTokeniser_SwitchyGrampa_BPE(l=2)
     sentence = "workhorses, unité!"
     for _ in range(10):
         print("Global preprocessor:", switch.preprocessor.do(sentence))

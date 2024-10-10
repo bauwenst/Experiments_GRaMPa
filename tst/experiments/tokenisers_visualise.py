@@ -23,7 +23,7 @@ def main_BPE_corpus(word_corpus: NamedIterable[str]):
 
 
 def main_GRaMPa_word(word: str, unconstrained: bool=True):
-    tk = createTokeniser_SwitchyGrampa_BPE().subtokenisers[1]
+    tk = createTokeniser_SwitchyGrampa_BPE(l=2).subtokenisers[1]
     assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
     renorm = tk.renormalisation
     assert isinstance(renorm, PowerNormalisation)
@@ -43,7 +43,7 @@ def main_GRaMPa_word(word: str, unconstrained: bool=True):
 
 
 def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
-    tk = createTokeniser_SwitchyGrampa_BPE().subtokenisers[1]
+    tk = createTokeniser_SwitchyGrampa_BPE(l=2).subtokenisers[1]
     assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
     renorm = tk.renormalisation
     assert isinstance(renorm, PowerNormalisation)
@@ -51,13 +51,13 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
     # Infinite domain so that we can measure the effect of temperature in a histogram with LOC ordering without weird shit.
     tk.enableInfiniteDomain(unconstrained)
 
-    renorm.tau = "t"  # For the naming.
+    renorm.resetTemperature(0)
     segmentality = LineGraph(f"{tk.getName()}_{corpus.name}_t-vs-segmentality", caching=CacheMode.WRITE_ONLY)
     length       = LineGraph(f"{tk.getName()}_{corpus.name}_t-vs-length", caching=CacheMode.WRITE_ONLY)
 
     if segmentality.needs_computation or length.needs_computation:
-        for t in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0,
-                  -100.0, -50.0, -40.0, -30.0, -20.0, -10.0, -5.0, -4.0, -3.0, -2.0, -1.0]:
+        # for t in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, -100.0, -50.0, -40.0, -30.0, -20.0, -10.0, -5.0, -4.0, -3.0, -2.0, -1.0]:
+        for t in [-1e-15, -1e-14, -1e-13, -1e-12, -1e-11, -1e-10, -1e-9, -1e-8, -1e-7, -1e-6, -1e-5, -1e-4, -1e-3, -1e-2, -1e-1, -1]:
             renorm.resetTemperature(t)
             (seg_mean, seg_mode, seg_std), (length_mean, length_mode, length_std) = visualiseCharsVersusTokensRelationships(
                 tokeniser=tk,
@@ -78,7 +78,7 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
             x_label="Temperature",
             y_label="Segmentality",
             logx=True,
-            logx_becomes_linear_at=1.0
+            logx_becomes_linear_at=1e-15 #1.0  # TODO: TEMPORARY
         ),
         LineGraph.ArgsPerLine()
     )
@@ -87,7 +87,7 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
             x_label="Temperature",
             y_label="Token length",
             logx=True,
-            logx_becomes_linear_at=1.0
+            logx_becomes_linear_at=1e-15
         ),
         LineGraph.ArgsPerLine()
     )
@@ -107,4 +107,4 @@ if __name__ == "__main__":
 
     # main_GRaMPa_word("antidisestablishmentarianism", unconstrained=False)
     # main_BPE_corpus(corpus)
-    main_GRaMPa_corpus(corpus, unconstrained=False)
+    main_GRaMPa_corpus(corpus, unconstrained=True)

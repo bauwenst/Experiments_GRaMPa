@@ -1,3 +1,6 @@
+"""
+Fine-tuning task for seeing if a model can learn to predict how many characters are in a token.
+"""
 from datasets import Dataset, DatasetDict
 
 import evaluate

@@ -1,0 +1,14 @@
+# TODO
+- Re-tune parameters as follows:
+  -[ ] BPE-dropout: we already have p=0.1. Could verify RE(p).
+  -[ ] ULM-sampling: RE(alpha) for alphas above 1.0, since RE kept rising.
+  - Deterministic BPE+GRaMPa: 
+    -[ ] Choose temperatures based on histograms and/or examples: (-x, 1, +y).
+    -[x] RE(p), which is independent of temperature (or, we know it drops for all temps that aren't 1, so just use 1 always), says p=0.55.
+  - Deterministic ULM+GRaMPa: 
+    -[x] Same temperatures as above.
+    -[ ] RE(p), again with t=1. We fucked this tuning up last time by choosing alpha=0.5, k=64. Should've been alpha=1.0, k=1.
+- 512/6 training.
+  - In total we have 8 models.
+- Implement GLUE/SuperGLUE
+- Finetune

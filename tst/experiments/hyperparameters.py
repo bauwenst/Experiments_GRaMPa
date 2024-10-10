@@ -24,7 +24,7 @@ HIGH_KEY = r"$\lceil H_\alpha \rceil/H_0$"
 def searchTemperatures(markov_tokeniser: RandomVocabSegmentation_GreedyMarkov, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
     normaliser = markov_tokeniser.renormalisation
     assert isinstance(normaliser, PowerNormalisation)
-    normaliser.tau = "t"  # Trick to make .getName() not depend on the init setting.
+    normaliser.resetTemperature(0)
     g = LineGraph(f"renyi_t_{markov_tokeniser.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
     if g.needs_computation:
         for t in temperature_grid:
@@ -80,7 +80,7 @@ def searchMultiplexP(multiplex_tokeniser: StochasticTokeniserSwitch, corpus: Nam
 
 
 def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[str], alpha_grid: Iterable[float]) -> Tuple[float,float]:
-    kudo_tokeniser._alpha = "a"  # Trick to make .getName() not depend on the init setting.
+    kudo_tokeniser._alpha = "a"  # Trick to get the name independent.
     g = LineGraph(f"renyi_α_{kudo_tokeniser.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
     if g.needs_computation:
         for a in alpha_grid:
@@ -108,15 +108,84 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
     return alphas[idx_argmax], lows[idx_argmax]
 
 
+def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> Tuple[float,float]:
+    tk = Build_English_BPE(dropout=0).buildTokeniser()
+    tk._dropout_as_string = "p"
+    g = LineGraph(f"renyi_dropout_{tk.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
+    if g.needs_computation:
+        for p in dropout_grid:
+            wprint(f"Now testing dropout p={p}...")
+            tk = Build_English_BPE(dropout=p).buildTokeniser()
+
+            unigram_distribution = tokenDistributionFromSentences(tk, corpus)
+            low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
+            wprint(low, mid, high)
+
+            g.add(LOW_KEY,  p, low)
+            g.add(MID_KEY,  p, mid)
+            g.add(HIGH_KEY, p, high)
+
+    g.commitWithArgs(LineGraph.ArgsGlobal(
+        # y_lims=(0.35,0.65),
+        x_label=r"BPE dropout probability $p$",
+        x_tickspacing=0.1,
+        y_label="Rényi efficiency bounds",
+        legend_position="lower right"
+    ), LineGraph.ArgsPerLine())
+
+    dropouts, lows = g.data[LOW_KEY]
+    idx_argmax = np.argmax(lows)
+    return dropouts[idx_argmax], lows[idx_argmax]
+
+
 ########################################################################################################################
 
 
+def main_alphas():
+    # Get tokeniser
+    kudo = Build_English_Kudo(kbest=64, alpha=0).buildTokeniser()
+
+    # Get corpus
+    _, _, validation_corpus = loadCorpus(CORPUS_ID)
+
+    # Get grid
+    # equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19. The resulting alphas have equally spaced intersections with 1-x, i.e. the curves are equally "spread out".
+    # equally_spaced_points = np.linspace(0.05, 0.95, 37)
+    equally_spaced_points = np.linspace(0.05, 0.85, 17)  # Powers ranging from 0.02 to 10, since RE seems to increase at least until 1.0.
+    alphas = np.log(1-equally_spaced_points)/np.log(equally_spaced_points)
+
+    # Call search
+    print("Best alpha and its efficiency:", searchKudoAlpha(
+        kudo,
+        NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"]),
+        alpha_grid=alphas
+    ))
+
+
+def main_dropout():
+    # Get corpus
+    _, _, validation_corpus = loadCorpus(CORPUS_ID)
+
+    # Get grid
+    ps = np.linspace(0,1,21)
+
+    # Call search
+    print("Best dropout and its efficiency:", searchDropout(
+        NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"]),
+        dropout_grid=ps
+    ))
+
+
 def main_temperature(bpe_not_ulm: bool):
+    """
+    This experiment turns out to be inconclusive at best and pointing to a lower RE for higher temperature at worst,
+    which makes a lot of sense since you are decreasing segmentation entropy. You can't fine-tune temperature with RE.
+    """
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0)
+        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, l=2)
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0)
+        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l=2)
     grampa = switch.subtokenisers[1]
     assert isinstance(grampa, RandomVocabSegmentation_GreedyMarkov)
 
@@ -140,18 +209,12 @@ def main_temperature(bpe_not_ulm: bool):
 def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0)
+        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, t=temperature, l=2)
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0)
+        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, t=temperature, l=2)
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
-
-    grampa = switch.subtokenisers[1]
-    assert isinstance(grampa, RandomVocabSegmentation_GreedyMarkov)
-    renorm = grampa.renormalisation
-    assert isinstance(renorm, PowerNormalisation)
-    renorm.tau = temperature
 
     # Get grid
     grid = np.linspace(0.0, 1.0, 21)
@@ -161,25 +224,6 @@ def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
         switch,
         NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"]),
         probability_grid=grid
-    ))
-
-
-def main_alphas():
-    # Get tokeniser
-    kudo = Build_English_Kudo(kbest=64, alpha=0).buildTokeniser()
-
-    # Get corpus
-    _, _, validation_corpus = loadCorpus(CORPUS_ID)
-
-    # Get grid
-    equally_spaced_points = np.linspace(0.05, 0.5, 19)  # Alternatively use 10 instead of 19. The resulting alphas have equally spaced intersections with 1-x, i.e. the curves are equally "spread out".
-    alphas = np.log(1-equally_spaced_points)/np.log(equally_spaced_points)
-
-    # Call search
-    print("Best alpha and its efficiency:", searchKudoAlpha(
-        kudo,
-        NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"]),
-        alpha_grid=alphas
     ))
 
 
@@ -196,6 +240,7 @@ if __name__ == "__main__":
         parser.add_argument("--experiment_multiplex",   default=False, action="store_true")
         parser.add_argument("--experiment_temperature", default=False, action="store_true")
         parser.add_argument("--experiment_alpha",       default=False, action="store_true")
+        parser.add_argument("--experiment_dropout",     default=False, action="store_true")
 
         # Arguments that only hold for multiplexing
         parser.add_argument("--bpe_vocab", default=False, action="store_true")
@@ -208,5 +253,7 @@ if __name__ == "__main__":
             main_temperature(bpe_not_ulm=args.bpe_vocab)
         elif args.experiment_alpha:
             main_alphas()
+        elif args.experiment_dropout:
+            main_dropout()
         else:
             raise RuntimeWarning("No hyperparameter experiment was selected.")
