@@ -3,7 +3,8 @@
 #SBATCH --clusters=wice
 #SBATCH --partition=gpu_h100
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=16
+#SBATCH --gpus-per-node=1
+#SBATCH --ntasks=16
 #SBATCH --mail-user=thomas.bauwens@kuleuven.be
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --time=48:00:00
