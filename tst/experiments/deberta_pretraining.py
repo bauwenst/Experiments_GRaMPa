@@ -6,6 +6,7 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
+from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
 from tktkt.util.environment import IS_NOT_LINUX
 
@@ -59,6 +60,11 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
 
     # Testing parameters
     hp.EXAMPLES_PER_EVALUATION = 2**14  # Two times the amount of data processed for one descent.
+    hp.TRACK_BEST_MODEL = True
+    hp.EVAL_VS_SAVE_INTERVALS = Intervals(
+        evaluation=EveryNMinutes(minutes=60),
+        checkpointing=None
+    )
 
     ###
     if IS_NOT_LINUX:  # SlimPajama takes too long to get a stream for

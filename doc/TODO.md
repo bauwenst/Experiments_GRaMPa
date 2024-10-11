@@ -51,8 +51,6 @@
 - Throw one onto A100 debug to find a working batch size.
   - ERROR?!
 - Set up the low-resource versions first. If we run out of time, at least we have those.
-  - One thing I'm not sure about is that LaMoTO has no support for using a given metric for tracking the best model.
-    Since we have a custom eval loop for PPPL and it replaces eval loss, **we can't stop training even if loss increases.**
 - Throw all 8 onto H100.
   - Implement GLUE/SuperGLUE
   - Process paper comments
