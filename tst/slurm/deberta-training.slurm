@@ -10,4 +10,4 @@
 
 cd $VSC_DATA/Python/ExternalRepos/WiaT/
 conda activate draft
-PYTHONPATH=. python tst/experiments/deberta_pretraining.py --model_id 1
+PYTHONPATH=. python tst/experiments/deberta_pretraining.py --low_resource --model_id 1
