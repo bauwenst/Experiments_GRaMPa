@@ -5,7 +5,7 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
-from lamoto.tasks.mlm import MaskedLMHeadConfig
+from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
 from tktkt.util.environment import IS_NOT_LINUX
 
 
@@ -20,6 +20,8 @@ def makeConfig(tk: PreTrainedTokenizerBase) -> DebertaConfig:
     config.max_relative_positions = 512
     config.vocab_size = len(tk.get_vocab())
     config.tie_word_embeddings = True
+
+    config.max_position_embeddings = 1024  # The whole point of the paper is "help this tokeniser has a lot of tokens", so if we're going to truncate it better be decently far out. Can't be too far nevertheless, because pushing a full context through should still be feasible (in fact, that's what happens in packing). The use of relative embeddings means that we don't need to worry about the exact number and could arguably alter it at test time.
     return config
 
 
@@ -58,16 +60,68 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str):
     hp.EXAMPLES_PER_EVALUATION = 2**14  # Two times the amount of data processed for one descent.
 
     ###
-    task = MLM_SlimPajama(packing=True)
+    if IS_NOT_LINUX:  # SlimPajama takes too long to get a stream for
+        task = MLM_C4(packing=True)
+    else:
+        task = MLM_SlimPajama(packing=True)
     task.train(hp)
 
 
 if __name__ == "__main__":
     from tktkt.interfaces.huggingface import TktktToHuggingFace
-    from tst.experiments.tokenisers_instances import createTokeniser_SwitchyGrampa_ULM
-    deberta_pretraining(
-        TktktToHuggingFace(createTokeniser_SwitchyGrampa_ULM(
-            kbest=1, smoothing_power=1.0, t=1.0, l=2, p=0.55
-        )),
-        tk_name="ULM+GRaMPa"
-    )
+    from tst.experiments.tokenisers_instances import *
+
+    if IS_NOT_LINUX:  # TODO: Print model to see if it's right.
+        tk = Build_English_BPE(dropout=0.1).buildTokeniser()
+        tk_name = "BPE-dropout"
+        deberta_pretraining(TktktToHuggingFace(tk), tk_name)
+    else:
+        import argparse
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--model_id", type=int)
+        args = parser.parse_args()
+        if args.model_id == 1:
+            tk = Build_English_BPE(dropout=0.1).buildTokeniser()
+            tk_name = "BPE-dropout"
+        elif args.model_id == 2:
+            tk = Build_English_Kudo(kbest=64, alpha=None).buildTokeniser()  # TODO: Tuning
+            tk_name = "ULM"
+        elif args.model_id in {3, 4, 5}:
+            if args.model_id == 3:
+                temperature = 1.0
+            elif args.model_id == 4:
+                temperature = None     # TODO: Tuning
+            elif args.model_id == 5:
+                temperature = None     # TODO: Tuning
+            else:
+                raise RuntimeError()
+
+            tk = createTokeniser_SwitchyGrampa_BPE(
+                t=1.0, l=2,
+                p=None  # TODO: Tuning
+            )
+            tk_name = "BPE+GRaMPa"
+        elif args.model_id in {6, 7, 8}:
+            if args.model_id == 6:
+                temperature = 1.0
+            elif args.model_id == 7:
+                temperature = None  # TODO: Tuning
+            elif args.model_id == 8:
+                temperature = None  # TODO: Tuning
+            else:
+                raise RuntimeError()
+
+            tk = createTokeniser_SwitchyGrampa_ULM(
+                kbest=1, smoothing_power=1,
+                t=1.0, l=2,
+                p=None  # TODO: Tuning
+            )
+            tk_name = "ULM+GRaMPa"
+        else:
+            raise ValueError("Unknown model id:", args.model_id)
+
+        deberta_pretraining(
+            TktktToHuggingFace(tk),
+            tk_name=tk_name
+        )

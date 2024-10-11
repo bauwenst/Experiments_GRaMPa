@@ -13,9 +13,8 @@ CORPUS_ID   = ("allenai/c4", "en")
 CORPUS_SIZE = 2_000
 
 
-def main_BPE():
-    # Load tokeniser and word isolator
-    tk = createTokeniser_SwitchyGrampa_BPE(dropout=0.0).subtokenisers[0]
+def main(tk):
+    # Load word isolator
     prep = Preprocessor(IdentityMapper(), IdentityMapper(), TraditionalPretokeniser())
 
     # Load corpus
@@ -29,4 +28,7 @@ def main_BPE():
 
 
 if __name__ == "__main__":
-    main_BPE()
+    switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, t=1.0, l=1)
+
+    # main(switch.subtokenisers[0])
+    main(switch.subtokenisers[1])

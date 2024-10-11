@@ -6,8 +6,10 @@ from typing import Iterable, Tuple
 import numpy as np
 
 from tktkt.evaluation.entropy import renyiEfficiency, tokenDistributionFromSentences
+from tktkt.evaluation.compare import ExactMatches
 from tktkt.models.random.pathmarkov import RandomVocabSegmentation_GreedyMarkov, PowerNormalisation
 from tktkt.models.kudopiece.segmentation import KudoPieceTokeniser
+from tktkt.preparation.instances import TraditionalPreprocessor
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.util.types import NamedIterable
 from tktkt.util.printing import wprint
@@ -227,13 +229,101 @@ def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
     ))
 
 
+def main_compareBPE():
+    """
+    Compare stochastic BPE with deterministic BPE, specifically how much of the stochastic tokenisations match the deterministic ones.
+    """
+    g = LineGraph("diffrate_BPE", caching=CacheMode.WRITE_ONLY)
+
+    # Get corpus
+    _, _, validation_corpus = loadCorpus(CORPUS_ID)
+    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+
+    # Get metric
+    metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
+
+    # Get tokenisers
+    deterministic = Build_English_BPE(dropout=0.0).buildTokeniser()
+    for p in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        wprint(f"Comparing to BPE p={p}...")
+        stochastic = Build_English_BPE(dropout=p).buildTokeniser()
+        ratio, _, _ = metric.compare(deterministic, stochastic)
+        g.add(f"$|V| = {deterministic.getVocabSize()}$", p, 1-ratio)
+
+    g.commitWithArgs(
+        LineGraph.ArgsGlobal(
+            x_label="Dropout rate $p$",
+            x_tickspacing=0.1,
+
+            y_label="Word regularisation rate vs. classic BPE",
+            y_tickspacing=0.1
+        ),
+        LineGraph.ArgsPerLine()
+    )
+
+
+def main_compareULM():
+    """
+    Compare stochastic ULM with deterministic ULM, specifically how much of the stochastic tokenisations match the deterministic ones.
+    """
+    g = LineGraph("diffrate_ULM", caching=CacheMode.WRITE_ONLY)
+
+    # Get corpus
+    _, _, validation_corpus = loadCorpus(CORPUS_ID)
+    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+
+    # Get metric
+    metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
+
+    # Get tokenisers
+    deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
+    for a in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0, 4.0, 5.0]:
+        wprint(f"Comparing to ULM a={a}...")
+        stochastic = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
+        ratio, _, _ = metric.compare(deterministic, stochastic)
+        g.add(f"$|V| = {deterministic.getVocabSize()}$", a, 1-ratio)
+
+    g.commitWithArgs(
+        LineGraph.ArgsGlobal(
+            x_label=r"Normalisation power $\alpha$",
+            x_tickspacing=0.1,
+
+            y_label="Word regularisation rate vs. argmax ULM",
+            y_tickspacing=0.1
+        ),
+        LineGraph.ArgsPerLine()
+    )
+
+
+def main_compareChosenBPEandULM():
+    # Get corpus
+    _, _, validation_corpus = loadCorpus(CORPUS_ID, validation_size=1000)
+    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+
+    # Get metric
+    metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
+
+    # Get tokenisers
+    p = 0.1  # Maximal RE and also recommended by the paper based on BLEU.
+    deterministic = Build_English_BPE(dropout=0.0).buildTokeniser()
+    stochastic    = Build_English_BPE(dropout=p).buildTokeniser()
+    ratio, _, _ = metric.compare(deterministic, stochastic)
+    print(f"BPE vs BPE-dropout({p}):", ratio)
+
+    a = 0.3  # Inflection point of RE, used by Cognetta, and between Kudo's recommended 0.2 and 0.5.
+    deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
+    stochastic    = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
+    ratio, _, _ = metric.compare(deterministic, stochastic)
+    print(f"ULM(k=1) vs ULM(k=64,a={a}):", ratio)
+
+
 ########################################################################################################################
 
 
 if __name__ == "__main__":
     if IS_NOT_LINUX:
-        main_multiplex(bpe_not_ulm=True)
-        main_multiplex(bpe_not_ulm=False)
+        main_compareBPE()
+        main_compareULM()
     else:
         import argparse
         parser = argparse.ArgumentParser()

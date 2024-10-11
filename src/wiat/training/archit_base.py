@@ -47,5 +47,5 @@ class DebertaBaseModel(BaseModel[DebertaConfig]):
 
             num_hidden_layers=raw_config.num_hidden_layers,
             num_attention_heads=raw_config.num_attention_heads,
-            context_length=12276  # Explanation for this number: https://bauwenst.github.io/posts/explainers/2024-09-22-DeBERTa-receptive-field/
+            context_length=raw_config.max_position_embeddings or (2*raw_config.max_relative_positions-1)*raw_config.num_hidden_layers  # Explanation for this formula: https://bauwenst.github.io/posts/explainers/2024-09-22-DeBERTa-receptive-field/
         )
