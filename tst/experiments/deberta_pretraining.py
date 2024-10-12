@@ -6,7 +6,7 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
-from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes
+from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes, EveryNDescents
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
 from tktkt.util.environment import IS_NOT_LINUX
 
@@ -50,19 +50,20 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
         hp.EXAMPLES_PER_DEVICEBATCH = 2
     else:
         hp.WANDB_PROJECT = "wiat"
-        hp.EXAMPLES_PER_DEVICEBATCH = 64  # Should definitely fit on an A100.
+        hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
         hp.EXAMPLES_PER_EFFECTIVE_BATCH = 2048  # As in DeBERTa paper and also the best in the RoBERTa paper.
 
     # Training parameters
-    hp.LEARNING_RATE = 5e-3  # DeBERTa uses 2e-4. I use 20x that because small learning rates are dangerous.
-    hp.EFFECTIVE_BATCHES_WARMUP = 10_000
+    hp.LEARNING_RATE = 1e-3  # DeBERTa uses 2e-4. I use 5x that because small learning rates are dangerous as we saw in the GPT experiment for HEL.
+    hp.EFFECTIVE_BATCHES_WARMUP = 256  # TODO: This is the only fucky part in our experiments next to the high learning rate. We bank on 2 days of fine-tuning with top speed being 24 batches/hr, so 1.2k total. 12-layer models do 10k warmup steps... I wouldn't go lower than 256: https://arxiv.org/abs/2406.09405v1
     hp.MLM_PROBABILITY = 0.15
 
     # Testing parameters
-    hp.EXAMPLES_PER_EVALUATION = 2**14  # Two times the amount of data processed for one descent.
+    hp.EXAMPLES_PER_EVALUATION = 2**14  # 16k examples, or 8 batches. Our fast tokenisers do 2.5m/b and so 20m for eval. Our slow tokenisers need 1.5x the time and hence 30m for eval.
     hp.TRACK_BEST_MODEL = True
     hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-        evaluation=EveryNMinutes(minutes=60),
+        #evaluation=EveryNMinutes(minutes=9*20),  # Train for 9 x 20 minutes (3 hours, equalling 72 train batches), then evaluate for 1 x 20 minutes. Hence, exactly 10% of compute is spent verifying that we don't overfit. Every save cycle is 200 minutes = 3h20m. For the slow tokeniser, it's 30m for an eval and 9 x 20 == 6 x 30 so 1/7 = 14% of compute in eval, with 3 hours being 48 batches.
+        evaluation=EveryNDescents(descents=64),  # Makes more sense than minutes for two reasons: (1) you can compare measurements between models independent of tokeniser speed, and (2) unlike time intervals, the fraction of time spent in compute vs. spent in eval is a constant.
         checkpointing=None
     )
 
@@ -92,7 +93,7 @@ if __name__ == "__main__":
         parser.add_argument("--model_id", type=int)
         parser.add_argument("--low_resource", action="store_true")
         args = parser.parse_args()
-        if args.model_id == 1:
+        if args.model_id == 1:  # 150 seconds == 2.5 minutes per batch.
             tk = Build_English_BPE(dropout=0.1).buildTokeniser()
             tk_name = "BPE-dropout"
         elif args.model_id == 2:
@@ -113,7 +114,7 @@ if __name__ == "__main__":
                 p=0.5
             )
             tk_name = f"BPE+GRaMPa(t={temperature},l=2)"
-        elif args.model_id in {6, 7, 8}:
+        elif args.model_id in {6, 7, 8}:  # 220 seconds == 3.67 minutes per batch.
             if args.model_id == 6:
                 temperature = 1.0
             elif args.model_id == 7:
