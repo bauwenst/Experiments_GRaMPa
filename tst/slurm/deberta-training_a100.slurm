@@ -1,10 +1,10 @@
 #!/bin/bash -l
 #SBATCH --account=lp_lagom
 #SBATCH --clusters=wice
-#SBATCH --partition=gpu_h100
+#SBATCH --partition=gpu_a100
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
-#SBATCH --ntasks=16
+#SBATCH --ntasks=18
 #SBATCH --mail-user=thomas.bauwens@kuleuven.be
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --time=48:00:00
