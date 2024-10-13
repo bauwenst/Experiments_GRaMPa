@@ -7,9 +7,9 @@
 #SBATCH --ntasks=16
 #SBATCH --mail-user=thomas.bauwens@kuleuven.be
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --time=00:25:00
+#SBATCH --time=00:10:00
 
 cd $VSC_DATA/Python/ExternalRepos/WiaT/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/deberta_pretraining.py --low_resource --model_id 1
+PYTHONPATH=. python tst/experiments/deberta_pretraining.py --low_resource --model_id 6
