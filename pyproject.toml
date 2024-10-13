@@ -31,5 +31,5 @@ dependencies = [
 github = [
     "tktkt[github] @ git+https://github.com/bauwenst/TkTkT",
     "fiject        @ git+https://github.com/bauwenst/fiject",
-    "lamoto        @ git+https://github.com/bauwenst/LaMoTO"
+    "lamoto[github] @ git+https://github.com/bauwenst/LaMoTO"
 ]
