@@ -26,6 +26,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
                        tk_name: str, task_id: int):
     MAX_EXAMPLES_PHASE1    = 8192*32  # 8192 batches at batch size 32
     EXAMPLES_BETWEEN_EVALS = 512*32   # 512 batches at batch size 32
+    MAX_EXAMPLES_PHASE2_MULTIPLIER = 3
 
     showWarningsAndProgress(False)
     if n_samples < 1:
@@ -121,7 +122,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
 
     ###
     # hp.HARD_STOPPING_CONDITION = original_stopping_condition  TODO: Should be the case eventually, but right now we use the following because it scales with batch size.
-    hp.HARD_STOPPING_CONDITION = AfterNDescents(int(3*MAX_EXAMPLES_PHASE1/bs))
+    hp.HARD_STOPPING_CONDITION = AfterNDescents(int(MAX_EXAMPLES_PHASE2_MULTIPLIER*MAX_EXAMPLES_PHASE1/bs))
     hp.EVAL_VS_SAVE_INTERVALS = Intervals(
         evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
         checkpointing=None

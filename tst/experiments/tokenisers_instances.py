@@ -149,16 +149,19 @@ def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain,
     elif model_id == 2:
         tokeniser = Build_English_Kudo(kbest=64, alpha=0.15).buildTokeniser()
         shorthand = "ULM"
-    elif model_id in {3, 4, 5}:
+    elif model_id in {3, 4, 5, 9}:
         if model_id == 3:
-            temperature    = 1.0
-            minimum_length = 1
+            temperature    = +1.0
+            minimum_length = 2
         elif model_id == 4:
             temperature    = +5.0
             minimum_length = 2
         elif model_id == 5:
             temperature    = -10.0
             minimum_length = 2
+        elif model_id == 9:
+            temperature    = +1.0
+            minimum_length = 1
         else:
             raise RuntimeError()
 
@@ -167,16 +170,19 @@ def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain,
             p=0.5
         )
         shorthand = f"BPE+GRaMPa(t={temperature},l={minimum_length})"
-    elif model_id in {6, 7, 8}:  # 220 seconds == 3.67 minutes per batch.
+    elif model_id in {6, 7, 8, 10}:  # 220 seconds == 3.67 minutes per batch.
         if model_id == 6:
-            temperature    = 1.0
-            minimum_length = 1
+            temperature    = +1.0
+            minimum_length = 2
         elif model_id == 7:
             temperature    = +5.0
             minimum_length = 2
         elif model_id == 8:
             temperature    = -10.0
             minimum_length = 2
+        elif model_id == 10:
+            temperature    = +1.0
+            minimum_length = 1
         else:
             raise RuntimeError()
 
