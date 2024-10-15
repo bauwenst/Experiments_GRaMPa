@@ -12,7 +12,7 @@ from wiat.training.augmentation_typos import TaskWithTypos
 from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig, BaseModelExtendedConfig
 from archit.instantiation.abstracts import HeadConfig
 from lamoto.trainer.hyperparameters import getDefaultHyperparameters, TaskHyperparameters, AfterNDescents, Intervals, \
-    EveryNDescentsOrOncePerEpoch
+    EveryNDescentsOrOncePerEpoch, AfterNEpochs
 from lamoto.tasks._core import Task, RankingMetricSpec, showWarningsAndProgress
 from lamoto.tasks import *
 from tktkt.interfaces.huggingface import TktktToHuggingFace
@@ -24,6 +24,8 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
                        task: Task, hp: TaskHyperparameters, typo_splits: Set[str], text_fields: Set[str],   # What to test on
                        n_samples: int, rank_by: RankingMetricSpec,
                        tk_name: str, task_id: int):
+    BATCHES_BETWEEN_EVALS = 512
+
     showWarningsAndProgress(False)
     if n_samples < 1:
         raise ValueError("At least one hyperparameter sample must be taken.")
@@ -74,12 +76,14 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         hp.learning_rate                = lr
         hp.adamw_decay_rate             = dr
 
+        ###
         hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # Can't send more to a device than an effective batch.
-
         hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-            evaluation=EveryNDescentsOrOncePerEpoch(descents=512, effective_batch_size=hp.EXAMPLES_PER_EFFECTIVE_BATCH),
+            evaluation=EveryNDescentsOrOncePerEpoch(descents=BATCHES_BETWEEN_EVALS, effective_batch_size=hp.EXAMPLES_PER_EFFECTIVE_BATCH),
             checkpointing=None
         )
+        ###
+
         print("\nStarting short tuning for hyperparameters:", tup)
         results = task.train(hp)
         print("Finished short tuning for hyperparameters:", tup)
@@ -114,6 +118,14 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     hp.EXAMPLES_PER_EFFECTIVE_BATCH = bs
     hp.learning_rate                = lr
     hp.adamw_decay_rate             = dr
+
+    ###
+    hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # Can't send more to a device than an effective batch.
+    hp.EVAL_VS_SAVE_INTERVALS = Intervals(
+        evaluation=EveryNDescentsOrOncePerEpoch(descents=BATCHES_BETWEEN_EVALS, effective_batch_size=hp.EXAMPLES_PER_EFFECTIVE_BATCH),
+        checkpointing=None
+    )
+    ###
 
     print("Starting long tuning for best hyperparameters:", argbest_hps)
     results = task.train(hp)
@@ -170,8 +182,9 @@ def getTypoSplitsById(typo_id: int) -> Set[str]:
 
 
 if __name__ == "__main__":
-
     hp = getDefaultHyperparameters()
+    hp.EVALS_OF_PATIENCE = 5
+    hp.HARD_STOPPING_CONDITION = AfterNEpochs(epochs=10, effective_batch_size=16)  # FIXME: This is a hack. The 16 is chosen because it's the lowest batch size that can be sampled. It should really be phrased in terms of descents or minutes, because they are the unit of time and we want to limit time.
 
     if IS_NOT_LINUX:
         hp.archit_basemodel_class = RobertaBaseModel
@@ -194,7 +207,7 @@ if __name__ == "__main__":
         parser.add_argument("--typo_id", type=int)
         args = parser.parse_args()
 
-        n_samples, checkpoint, model_id, task_id, typo_id = args.n_samples, args.checkpoint, args.model_id, args.task_id, args.typo_id
+        n_samples, checkpoint, model_id, task_id, typo_id = args.n_samples, args.checkpoint, args.old_model_id, args.task_id, args.typo_id
         tokeniser, shorthand = getTokeniserByModelId(model_id)
         tokeniser = TktktToHuggingFace(tokeniser)
 
