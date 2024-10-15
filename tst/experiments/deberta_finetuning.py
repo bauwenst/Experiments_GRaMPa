@@ -120,7 +120,8 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     hp.adamw_decay_rate             = dr
 
     ###
-    hp.HARD_STOPPING_CONDITION = original_stopping_condition
+    # hp.HARD_STOPPING_CONDITION = original_stopping_condition  TODO: Should be the case eventually, but right now we use the following because it scales with batch size.
+    hp.HARD_STOPPING_CONDITION = AfterNDescents(int(3*MAX_EXAMPLES_PHASE1/bs))
     hp.EVAL_VS_SAVE_INTERVALS = Intervals(
         evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
         checkpointing=None
@@ -185,7 +186,6 @@ def getTypoSplitsById(typo_id: int) -> Set[str]:
 if __name__ == "__main__":
     hp = getDefaultHyperparameters()
     hp.EVALS_OF_PATIENCE = 5
-    hp.HARD_STOPPING_CONDITION = AfterNEpochs(epochs=10, effective_batch_size=16)  # FIXME: This is a hack. The 16 is chosen because it's the lowest batch size that can be sampled. It should really be phrased in terms of descents or minutes, because they are the unit of time and we want to limit time.
 
     if IS_NOT_LINUX:
         hp.archit_basemodel_class = RobertaBaseModel
