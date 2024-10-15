@@ -2,33 +2,14 @@
 Rather than give a model the result of applying simple preprocessing + tokenisation (e.g. with ULM),
 insert the reverse of each pretoken before tokenising and see if the model can figure this out.
 """
-from lamoto.augmenting.augment_dataset import Task, PerturbWords
-
 from tktkt.interfaces import Preprocessor
 from tktkt.preparation.huggingface import HuggingFaceNormaliser, tn
 from tktkt.preparation.mappers import IdentityMapper, PseudoByteMapping
 from tktkt.preparation.splitters import *
 from tktkt.preparation.instances import RobertaSpaceMarker
-from tktkt.preparation.perturbers import *
 from tktkt.models.huggingface.wrapper import HuggingFaceTokeniser
 
 from transformers import AutoTokenizer
-
-
-class TyposLevenshtein1(PerturbWords):
-    def __init__(self, task: Task, text_field_name: str, p: float=0.10):
-        sampler = ConstantSampler(n=1)
-        super().__init__(task, text_field_name=text_field_name, mapping=ParallelPerturber(
-            p=p,
-            perturbations=[
-                Substitute(0, sampler=sampler),
-                Insert(0, sampler=sampler),
-                Pop(0, sampler=sampler)
-            ]
-        ))
-
-
-########################################################################################################################
 
 
 class CommonsenseWithReverse(PretokeniserSequence):

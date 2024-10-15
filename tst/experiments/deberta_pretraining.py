@@ -6,7 +6,7 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
-from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes, EveryNDescents
+from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes, EveryNDescents, AfterNDescents
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
 from tktkt.util.environment import IS_NOT_LINUX
 
@@ -57,6 +57,8 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
     hp.LEARNING_RATE = 1e-3  # DeBERTa uses 2e-4. I use 5x that because small learning rates are dangerous as we saw in the GPT experiment for HEL.
     hp.EFFECTIVE_BATCHES_WARMUP = 256  # TODO: This is the only fucky part in our experiments next to the high learning rate. We bank on 2 days of fine-tuning with top speed being 24 batches/hr, so 1.2k total. 12-layer models do 10k warmup steps... I wouldn't go lower than 256: https://arxiv.org/abs/2406.09405v1
     hp.MLM_PROBABILITY = 0.15
+
+    hp.HARD_STOPPING_CONDITION = AfterNDescents(descents=512)  # Should be easily reachable within 2 days on an A100. SP ULM can do over 1000 in 40 hours. HF BPE can do 900 in 40 hours. GRaMPa can get to 512 in a little over 30 hours.
 
     # Testing parameters
     hp.EXAMPLES_PER_EVALUATION = 2**14  # 16k examples, or 8 batches. Our fast tokenisers do 2.5m/b and so 20m for eval. Our slow tokenisers need 1.5x the time and hence 30m for eval.
