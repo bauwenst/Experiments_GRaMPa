@@ -1,7 +1,10 @@
 from tst.preamble import *
 from tst.experiments.tokenisers_training import MARKER
 
+from typing import Tuple
+
 from tktkt.interfaces import Preprocessor, Vocab
+from tktkt.interfaces.tokeniser import TokeniserWithFiniteTypeDomain
 from tktkt.preparation.instances import ModernEnglishPreprocessor, RobertaSpaceMarker, KudoSpaceMarker, \
     SentencePiecePreprocessor, IdentityPreprocessor, TraditionalPretokeniser, TruncateAndNormalise, IdentityMapper, BoundaryMarker
 from tktkt.models.bpe.vocabularisation import BPEVocabulariser, DEFAULT_FIVE_SPECIALS
@@ -136,10 +139,54 @@ def createTokeniser_SwitchyGrampa_BPE(p: float=0.5,
     )
 
 
-if __name__ == "__main__":
-    switch = createTokeniser_SwitchyGrampa_BPE(l=2)
-    sentence = "workhorses, unité!"
-    for _ in range(10):
-        print("Global preprocessor:", switch.preprocessor.do(sentence))
-        print("Tokenised result:", switch.prepareAndTokenise(sentence))
-        print()
+def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain, str]:
+    """
+    Hard-coded tokeniser instances enumerated for easy selection with a command-line script.
+    """
+    if model_id == 1:  # 150 seconds == 2.5 minutes per batch.
+        tokeniser = Build_English_BPE(dropout=0.1).buildTokeniser()
+        shorthand = "BPE-dropout"
+    elif model_id == 2:
+        tokeniser = Build_English_Kudo(kbest=64, alpha=0.15).buildTokeniser()
+        shorthand = "ULM"
+    elif model_id in {3, 4, 5}:
+        if model_id == 3:
+            temperature    = 1.0
+            minimum_length = 1
+        elif model_id == 4:
+            temperature    = +5.0
+            minimum_length = 2
+        elif model_id == 5:
+            temperature    = -10.0
+            minimum_length = 2
+        else:
+            raise RuntimeError()
+
+        tokeniser = createTokeniser_SwitchyGrampa_BPE(
+            t=temperature, l=minimum_length,
+            p=0.5
+        )
+        shorthand = f"BPE+GRaMPa(t={temperature},l={minimum_length})"
+    elif model_id in {6, 7, 8}:  # 220 seconds == 3.67 minutes per batch.
+        if model_id == 6:
+            temperature    = 1.0
+            minimum_length = 1
+        elif model_id == 7:
+            temperature    = +5.0
+            minimum_length = 2
+        elif model_id == 8:
+            temperature    = -10.0
+            minimum_length = 2
+        else:
+            raise RuntimeError()
+
+        tokeniser = createTokeniser_SwitchyGrampa_ULM(
+            kbest=1, smoothing_power=1,
+            t=temperature, l=minimum_length,
+            p=0.5
+        )
+        shorthand = f"ULM+GRaMPa(t={temperature},l={minimum_length})"
+    else:
+        raise ValueError("Unknown model id:", model_id)
+
+    return tokeniser, shorthand
