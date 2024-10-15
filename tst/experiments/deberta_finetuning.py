@@ -24,7 +24,8 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
                        task: Task, hp: TaskHyperparameters, typo_splits: Set[str], text_fields: Set[str],   # What to test on
                        n_samples: int, rank_by: RankingMetricSpec,
                        tk_name: str, task_id: int):
-    BATCHES_BETWEEN_EVALS = 512
+    MAX_EXAMPLES_PHASE1    = 8192*32  # 8192 batches at batch size 32
+    EXAMPLES_BETWEEN_EVALS = 512*32   # 512 batches at batch size 32
 
     showWarningsAndProgress(False)
     if n_samples < 1:
@@ -44,11 +45,10 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     hp.SAVE_AS = "deberta" + "-" + tk_name
     if IS_NOT_LINUX:
         max_device_batch_size = 32
-        hp.HARD_STOPPING_CONDITION = AfterNDescents(descents=16)
+        MAX_EXAMPLES_PHASE1   = 16*32
     else:
         # hp.WANDB_PROJECT = "wiat"  # Don't log these models to WandB.
         max_device_batch_size = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
-        hp.HARD_STOPPING_CONDITION = AfterNDescents(descents=8192)
 
     # Hardcoded grids for now. Probably want to make all of this customisable in the future.
     warmups               = [50, 100, 500, 1000]
@@ -77,11 +77,12 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         hp.adamw_decay_rate             = dr
 
         ###
-        hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # Can't send more to a device than an effective batch.
+        hp.HARD_STOPPING_CONDITION  = AfterNDescents(descents=int(MAX_EXAMPLES_PHASE1/bs))  # Half as many descents for double the batch size.
         hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-            evaluation=EveryNDescentsOrOncePerEpoch(descents=BATCHES_BETWEEN_EVALS, effective_batch_size=hp.EXAMPLES_PER_EFFECTIVE_BATCH),
+            evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
             checkpointing=None
         )
+        hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # TODO: Should be done inside LaMoTO.
         ###
 
         print("\nStarting short tuning for hyperparameters:", tup)
@@ -111,7 +112,6 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         pass
     else:
         hp.WANDB_PROJECT = "wiat"
-    hp.HARD_STOPPING_CONDITION = original_stopping_condition
 
     wu, bs, lr, dr = argbest_hps
     hp.EFFECTIVE_BATCHES_WARMUP     = wu
@@ -120,11 +120,12 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     hp.adamw_decay_rate             = dr
 
     ###
-    hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # Can't send more to a device than an effective batch.
+    hp.HARD_STOPPING_CONDITION = original_stopping_condition
     hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-        evaluation=EveryNDescentsOrOncePerEpoch(descents=BATCHES_BETWEEN_EVALS, effective_batch_size=hp.EXAMPLES_PER_EFFECTIVE_BATCH),
+        evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
         checkpointing=None
     )
+    hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # TODO: Should be done inside LaMoTO.
     ###
 
     print("Starting long tuning for best hyperparameters:", argbest_hps)
