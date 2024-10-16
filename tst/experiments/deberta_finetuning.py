@@ -22,10 +22,10 @@ from tktkt.util.printing import dprint, pluralise
 
 def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBase,                         # What to test
                        task: Task, hp: TaskHyperparameters, typo_splits: Set[str], text_fields: Set[str],   # What to test on
-                       n_samples: int, rank_by: RankingMetricSpec,
+                       n_samples: int, max_batches_at_size_32: int, rank_by: RankingMetricSpec,
                        tk_name: str, task_id: int):
-    MAX_EXAMPLES_PHASE1    = 8192*32  # 8192 batches at batch size 32
-    EXAMPLES_BETWEEN_EVALS = 512*32   # 512 batches at batch size 32
+    MAX_EXAMPLES_PHASE1    = 32*max_batches_at_size_32  # => batch size 32 has this many batches at most. Recommended is 1024.
+    EXAMPLES_BETWEEN_EVALS = 32*512                     # => idem
     MAX_EXAMPLES_PHASE2_MULTIPLIER = 3
 
     showWarningsAndProgress(False)
@@ -131,6 +131,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     ###
 
     print("Starting long tuning for best hyperparameters:", argbest_hps)
+    task.metric_config.to_rank = rank_by
     results = task.train(hp)
     print("Finished long tuning for best hyperparameters:", argbest_hps)
     print("Results:")
@@ -191,6 +192,7 @@ if __name__ == "__main__":
     if IS_NOT_LINUX:
         hp.archit_basemodel_class = RobertaBaseModel
         n_samples = 3
+        max_batches_at_bs32 = 1024
         checkpoint = "haisongzhang/roberta-tiny-cased"
         model_id  = 1
         task_id   = 1
@@ -203,13 +205,14 @@ if __name__ == "__main__":
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument("--n_samples", type=int)
+        parser.add_argument("--max_batches_at_bs32", type=int, default=1024)
         parser.add_argument("--checkpoint", type=str)
         parser.add_argument("--old_model_id", type=int)
         parser.add_argument("--task_id", type=int)
         parser.add_argument("--typo_id", type=int)
         args = parser.parse_args()
 
-        n_samples, checkpoint, model_id, task_id, typo_id = args.n_samples, args.checkpoint, args.old_model_id, args.task_id, args.typo_id
+        n_samples, max_batches_at_bs32, checkpoint, model_id, task_id, typo_id = args.n_samples, args.max_batches_at_bs32, args.checkpoint, args.old_model_id, args.task_id, args.typo_id
         tokeniser, shorthand = getTokeniserByModelId(model_id)
         tokeniser = TktktToHuggingFace(tokeniser)
 
@@ -223,6 +226,6 @@ if __name__ == "__main__":
     deberta_finetuning(
         deberta_checkpoint=checkpoint, tokeniser=tokeniser,
         task=task, hp=hp, text_fields=text_fields, typo_splits=typo_splits,
-        n_samples=n_samples, rank_by=rank_by,
+        n_samples=n_samples, max_batches_at_size_32=max_batches_at_bs32, rank_by=rank_by,
         tk_name=shorthand, task_id=task_id
     )
