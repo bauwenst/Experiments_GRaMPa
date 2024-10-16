@@ -28,7 +28,7 @@ def makeConfig(tk: PreTrainedTokenizerBase) -> DebertaConfig:
     return config
 
 
-def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource: bool):
+def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource: bool, continue_from_checkpoint: str=None):
     hp = SUGGESTED_HYPERPARAMETERS_MLM
 
     hp.SEED = 69420
@@ -78,7 +78,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
 
     if low_resource:
         task = TaskWithAugmentedDataset(task, augmentation=Truncate(max_examples=50_000), splits={"train"})
-    task.train(hp)
+    task.train(hp, resume_from_folder=Path(continue_from_checkpoint) if continue_from_checkpoint else None)
 
 
 if __name__ == "__main__":
@@ -95,6 +95,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("--model_id", type=int)
         parser.add_argument("--low_resource", action="store_true")
+        parser.add_argument("--continue_from", type=str)
         args = parser.parse_args()
 
         # This is all you need.
@@ -102,5 +103,6 @@ if __name__ == "__main__":
         deberta_pretraining(
             TktktToHuggingFace(tokeniser),
             tk_name=shorthand,
-            low_resource=args.low_resource
+            low_resource=args.low_resource,
+            continue_from_checkpoint=args.continue_from
         )

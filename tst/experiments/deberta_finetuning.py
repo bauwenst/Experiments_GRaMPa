@@ -70,7 +70,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     ranking_metric_name = "eval_" + rank_by.fullName()
     best_ranking_value  = -float("inf") if rank_by.higher_is_better else float("inf")
     argbest_hps         = None
-    for tup in samples:
+    for n, tup in enumerate(samples):
         wu, bs, lr, dr = tup
         hp.EFFECTIVE_BATCHES_WARMUP     = wu
         hp.EXAMPLES_PER_EFFECTIVE_BATCH = bs
@@ -86,9 +86,9 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # TODO: Should be done inside LaMoTO.
         ###
 
-        print("\nStarting short tuning for hyperparameters:", tup)
+        print(f"\nStarting short tuning for {n}th hyperparameter set:", tup)
         results = task.train(hp)
-        print("Finished short tuning for hyperparameters:", tup)
+        print(f"Finished short tuning for {n}th hyperparameter set:", tup)
         print("Results:")
         dprint(results, indent=1)
         print("="*50)
