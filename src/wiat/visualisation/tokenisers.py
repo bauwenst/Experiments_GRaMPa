@@ -37,7 +37,7 @@ def visualiseCharsVersusTokensRelationships(tokeniser: TokeniserWithFiniteTypeDo
     name = tokeniser.getName()
     FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = name + "_" + raw_words.name
 
-    histo_chars_per_token     = StreamingMultiHistogram("cpt-ratios", binspec=BinSpec.halfopen(minimum=1, width=1))
+    histo_chars_per_token     = StreamingMultiHistogram("cpt-ratios", binspec=BinSpec.halfopen(minimum=1, width=0.25))
     histo_tokens_per_char = VariableGranularityHistogram("tokens-per-char")
     histo_chars_across_tokens = StreamingMultiHistogram("chars-in-tokens", binspec=BinSpec.halfopen(minimum=1, width=1))
     histo_chars_across_types  = StreamingMultiHistogram("chars-in-types", binspec=BinSpec.halfopen(minimum=1, width=1))
@@ -71,14 +71,14 @@ def visualiseCharsVersusTokensRelationships(tokeniser: TokeniserWithFiniteTypeDo
                     histo_chars_across_tokens.add(name, len(token))
 
     histo_chars_per_token.commit(StreamingMultiHistogram.ArgsGlobal(
-        x_label="Characters-per-token ratio",
+        x_label="Characters-per-token ratio $R$",
         x_center_ticks=False,
-        x_tickspacing=1,
+        x_tickspacing=0.25,
         y_label="Fraction of words",
         relative_counts=True
     ))
     histo_tokens_per_char.commit(VariableGranularityHistogram.ArgsGlobal(
-        x_label=r"Tokens per character (word tokens $\to$ character tokens)",  # Lowest is 1/n, highest is 1/1. The value 1/n adds to all bins between 0 and 1/(n+1), lumping it in with a ratio of 0 which is impossible.
+        x_label=r"Segmentality $\mathcal S$ (word tokens $\to$ character tokens)",  # Lowest is 1/n, highest is 1/1. The value 1/n adds to all bins between 0 and 1/(n+1), lumping it in with a ratio of 0 which is impossible.
         y_label="Fraction of words",
         relative_counts=True,
         x_tickspacing=0.1,
@@ -173,7 +173,7 @@ def visualiseSingleWordSegmentationDistribution(tokeniser: Tokeniser, word: str,
     histo_across_amounts              = StreamingMultiHistogram("amounts", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars), caching=CacheMode.IF_MISSING)
     bars_foreach_splitpoint           = HistoBars("split-heatmap", caching=CacheMode.IF_MISSING)
     histo_across_token_lengths        = StreamingMultiHistogram("lengths", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars), caching=CacheMode.IF_MISSING)
-    histo_across_char_per_token_ratio = StreamingMultiHistogram("cpt-ratio", BinSpec.halfopen(minimum=1, width=1), caching=CacheMode.IF_MISSING)
+    histo_across_char_per_token_ratio = StreamingMultiHistogram("cpt-ratio", BinSpec.halfopen(minimum=1, width=0.25), caching=CacheMode.IF_MISSING)
 
     if histo_across_segmentations.needs_computation or \
            histo_across_amounts.needs_computation or \
@@ -232,6 +232,7 @@ def visualiseSingleWordSegmentationDistribution(tokeniser: Tokeniser, word: str,
         x_label="Token length",
         x_tickspacing=1,
         x_center_ticks=True,
+        x_lims=(0.5,11.5),
 
         y_label="Fraction of tokens across samples",
         relative_counts=True

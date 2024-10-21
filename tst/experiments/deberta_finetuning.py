@@ -1,141 +1,61 @@
-from archit.instantiation.basemodels import RobertaBaseModel
-
 from tst.preamble import *
 from tst.experiments.tokenisers_instances import getTokeniserByModelId
 
 from typing import Set, Tuple
 from transformers import PreTrainedTokenizerBase
-import numpy.random as npr
 
-from wiat.training.archit_base import DebertaBaseModel
-from wiat.training.augmentation_typos import TaskWithTypos
-from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig, BaseModelExtendedConfig
-from archit.instantiation.abstracts import HeadConfig
-from lamoto.trainer.hyperparameters import getDefaultHyperparameters, TaskHyperparameters, AfterNDescents, Intervals, \
-    EveryNDescentsOrOncePerEpoch, AfterNEpochs
-from lamoto.tasks._core import Task, RankingMetricSpec, showWarningsAndProgress
-from lamoto.tasks import *
 from tktkt.interfaces.huggingface import TktktToHuggingFace
 from tktkt.util.environment import IS_NOT_LINUX
-from tktkt.util.printing import dprint, pluralise
+from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig, BaseModelExtendedConfig
+from archit.instantiation.abstracts import HeadConfig
+from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, TaskHyperparameters
+from lamoto.tasks._core import Task, RankingMetricSpec
+from lamoto.tasks import *
+from lamoto.training.core import showWarningsAndProgress, LamotoPaths
+from lamoto.training.tuning import TaskTuner, MetaHyperparameters
+from wiat.training.archit_base import DebertaBaseModel
+from wiat.training.augmentation_typos import TaskWithTypos
 
 
 def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBase,                         # What to test
                        task: Task, hp: TaskHyperparameters, typo_splits: Set[str], text_fields: Set[str],   # What to test on
                        n_samples: int, max_batches_at_size_32: int, rank_by: RankingMetricSpec,
                        tk_name: str, task_id: int):
-    MAX_EXAMPLES_PHASE1    = 32*max_batches_at_size_32  # => batch size 32 has this many batches at most. Recommended is 1024.
-    EXAMPLES_BETWEEN_EVALS = 32*512                     # => idem
-    MAX_EXAMPLES_PHASE2_MULTIPLIER = 3
-
-    showWarningsAndProgress(False)
+    showWarningsAndProgress(True)
     if n_samples < 1:
         raise ValueError("At least one hyperparameter sample must be taken.")
-
-    rng = npr.default_rng(hp.SEED + task_id + abs(hash(tk_name)))  # HPs are reproducible given the same tokeniser and task and seed.
-
-    original_stopping_condition = hp.HARD_STOPPING_CONDITION
 
     if typo_splits:
         task = TaskWithTypos(task, text_fields=text_fields, splits=typo_splits, p=0.10)
 
-    # PHASE 1: Try to find the optimal set of hyperparameters from n grid samples.
-    hp.init_weights = True
     hp.MODEL_CONFIG_OR_CHECKPOINT = deberta_checkpoint
     hp.TOKENISER = tokeniser
     hp.SAVE_AS = "deberta" + "-" + tk_name
     if IS_NOT_LINUX:
-        max_device_batch_size = 32
-        MAX_EXAMPLES_PHASE1   = 16*32
-    else:
-        # hp.WANDB_PROJECT = "wiat"  # Don't log these models to WandB.
-        max_device_batch_size = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
-
-    # Hardcoded grids for now. Probably want to make all of this customisable in the future.
-    warmups               = [50, 100, 500, 1000]
-    effective_batch_sizes = [16, 32, 64, 128, 256, 512]
-    learning_rates        = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
-    decay_rates           = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
-
-    samples = zip(
-        rng.choice(warmups, size=n_samples).tolist(),
-        rng.choice(effective_batch_sizes, size=n_samples).tolist(),
-        rng.choice(learning_rates, size=n_samples).tolist(),
-        rng.choice(decay_rates, size=n_samples).tolist()
-    )
-
-    hp.EXAMPLES_PER_EVALUATION = None  # Inference should be fast enough to process anything in GLUE quickly enough.
-    hp.TRACK_BEST_MODEL = True
-
-    ranking_metric_name = "eval_" + rank_by.fullName()
-    best_ranking_value  = -float("inf") if rank_by.higher_is_better else float("inf")
-    argbest_hps         = None
-    for n, tup in enumerate(samples):
-        wu, bs, lr, dr = tup
-        hp.EFFECTIVE_BATCHES_WARMUP     = wu
-        hp.EXAMPLES_PER_EFFECTIVE_BATCH = bs
-        hp.learning_rate                = lr
-        hp.adamw_decay_rate             = dr
-
-        ###
-        hp.HARD_STOPPING_CONDITION  = AfterNDescents(descents=int(MAX_EXAMPLES_PHASE1/bs))  # Half as many descents for double the batch size.
-        hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-            evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
-            checkpointing=None
-        )
-        hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # TODO: Should be done inside LaMoTO.
-        ###
-
-        print(f"\nStarting short tuning for {n}th hyperparameter set:", tup)
-        results = task.train(hp)
-        print(f"Finished short tuning for {n}th hyperparameter set:", tup)
-        print("Results:")
-        dprint(results, indent=1)
-        print("="*50)
-
-        if ranking_metric_name not in results:
-            print(f"Missing ranking metric {ranking_metric_name}. Cannot rank this hyperparameter set.")
-            continue
-
-        new_ranking_value = results[ranking_metric_name]
-        if rank_by.higher_is_better and new_ranking_value > best_ranking_value or \
-           not rank_by.higher_is_better and new_ranking_value < best_ranking_value:
-            best_ranking_value  = new_ranking_value
-            argbest_hps         = tup
-
-    if argbest_hps is None:
-        raise RuntimeError(f"No hyperparameter sets resulted in the ranking metric '{ranking_metric_name}'.")
-    else:
-        print(f"Best hyperparameters out of {pluralise(n_samples, 'sample')} as measured by {ranking_metric_name}:", argbest_hps)
-
-    # PHASE 2: Use the best hyperparameters you found and run until you can't.
-    if IS_NOT_LINUX:
-        pass
+        hp.EXAMPLES_PER_DEVICEBATCH = 16
     else:
         hp.WANDB_PROJECT = "wiat"
+        hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
 
-    wu, bs, lr, dr = argbest_hps
-    hp.EFFECTIVE_BATCHES_WARMUP     = wu
-    hp.EXAMPLES_PER_EFFECTIVE_BATCH = bs
-    hp.learning_rate                = lr
-    hp.adamw_decay_rate             = dr
+    meta = MetaHyperparameters(
+        meta_seed=hp.SEED + task_id + abs(hash(tk_name)),  # HPs are reproducible given the same tokeniser and task and seed.
+        n_grid_samples=n_samples,
+        rank_by=rank_by,
 
-    ###
-    # hp.HARD_STOPPING_CONDITION = original_stopping_condition  TODO: Should be the case eventually, but right now we use the following because it scales with batch size.
-    hp.HARD_STOPPING_CONDITION = AfterNDescents(int(MAX_EXAMPLES_PHASE2_MULTIPLIER*MAX_EXAMPLES_PHASE1/bs))
-    hp.EVAL_VS_SAVE_INTERVALS = Intervals(
-        evaluation=EveryNDescentsOrOncePerEpoch(descents=int(EXAMPLES_BETWEEN_EVALS/bs), effective_batch_size=bs),
-        checkpointing=None
+        max_examples_phase_1=32*max_batches_at_size_32,
+        max_evals_phase_1=4096,
+
+        max_examples_phase_2=32*max_batches_at_size_32*10,
+        max_evals_phase_2=4096
     )
-    hp.EXAMPLES_PER_DEVICEBATCH = min(max_device_batch_size, bs)  # TODO: Should be done inside LaMoTO.
-    ###
 
-    print("Starting long tuning for best hyperparameters:", argbest_hps)
-    task.metric_config.to_rank = rank_by
-    results = task.train(hp)
-    print("Finished long tuning for best hyperparameters:", argbest_hps)
-    print("Results:")
-    dprint(results, indent=1)
+    tuner = TaskTuner(
+        warmup_steps=[50, 100, 500, 1000],
+        effective_batch_sizes=[16, 32, 64, 128, 256, 512],
+        learning_rates=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
+        adamw_decay_rates=[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+    )
+    tuner.tune(task, hp, meta)
 
 
 def getTaskById(task_id: int) -> Tuple[Task, HeadConfig, RankingMetricSpec, Set[str]]:
@@ -157,7 +77,7 @@ def getTaskById(task_id: int) -> Tuple[Task, HeadConfig, RankingMetricSpec, Set[
     elif task_id == 6:
         return QNLI(), s, RankingMetricSpec("accuracy", "accuracy", True), {"sentence1", "sentence2"}  # Accuracy rather than F1 because the dataset has a skew of exactly 50%.
     elif task_id == 7:
-        return MNLI(), s, RankingMetricSpec("f1_macro", "f1_macro", True), {"premise", "hypothesis"}
+        return MNLI(), s, RankingMetricSpec("f1_macro", "f1", True), {"premise", "hypothesis"}
     elif task_id == 8:
         return WNLI(), s, RankingMetricSpec("accuracy", "accuracy", True), {"sentence1", "sentence2"}  # Idem
     elif task_id == 9:
@@ -190,15 +110,15 @@ if __name__ == "__main__":
     hp.EVALS_OF_PATIENCE = 5
 
     if IS_NOT_LINUX:
-        hp.archit_basemodel_class = RobertaBaseModel
+        hp.archit_basemodel_class = DebertaBaseModel
+        checkpoint = (LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44" / "checkpoint-512").as_posix()
         n_samples = 3
-        max_batches_at_bs32 = 1024
-        checkpoint = "haisongzhang/roberta-tiny-cased"
+        max_batches_at_bs32 = 128
         model_id  = 1
-        task_id   = 1
+        task_id   = 12
         typo_id   = 1
-        tokeniser = None
-        shorthand = "test"
+        tokeniser, shorthand = getTokeniserByModelId(model_id)
+        tokeniser = TktktToHuggingFace(tokeniser)
     else:
         hp.archit_basemodel_class = DebertaBaseModel
 

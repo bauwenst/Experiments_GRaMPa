@@ -32,48 +32,49 @@ def visualiseCounts(corpus: NamedIterable[str], tokeniser: Tokeniser, preprocess
 
     FIJECT_DEFAULTS.GLOBAL_STEM_SUFFIX = f"{corpus.name}_{tokeniser.getName()}"
 
-    text_length = StreamingMultiHistogram("count-chars",
-                                          BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
-    word_counts  = StreamingMultiHistogram("count-words",
-                                           BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
+    # text_length = StreamingMultiHistogram("count-chars",
+    #                                       BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
+    # word_counts  = StreamingMultiHistogram("count-words",
+    #                                        BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
     token_counts = StreamingMultiHistogram("count-tokens",
                                            BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
-    word_lengths = StreamingMultiHistogram("length-words",
-                                           BinSpec.halfopen(minimum=0, width=1), caching=CacheMode.IF_MISSING)
+    # word_lengths = StreamingMultiHistogram("length-words",
+    #                                        BinSpec.halfopen(minimum=0, width=1), caching=CacheMode.IF_MISSING)
     token_lengths = StreamingMultiHistogram("length-tokens",
                                            BinSpec.halfopen(minimum=0, width=1), caching=CacheMode.IF_MISSING)
-    graphs = [text_length, word_counts, token_counts, word_lengths, token_lengths]
+    # graphs = [text_length, word_counts, token_counts, word_lengths, token_lengths]
+    graphs = [token_counts, token_lengths]
 
     if any(g.needs_computation for g in graphs):
         for text in corpus:
             L_t = tokenLengths(tokeniser, text)
             L_w = pretokenLengths(preprocessor, text)
 
-            text_length.add("", len(text))
-            word_counts.add("", len(L_w))
+            # text_length.add("", len(text))
+            # word_counts.add("", len(L_w))
             token_counts.add("", len(L_t))
-            for l in L_w:
-                word_lengths.add("", l)
+            # for l in L_w:
+            #     word_lengths.add("", l)
             for l in L_t:
                 token_lengths.add("", l)
 
 
-    text_length.commit(StreamingMultiHistogram.ArgsGlobal(
-        x_tickspacing=2500,
-        x_label="Amount of characters",
-        x_lims=(None,25_000),
-
-        y_label="Examples",
-        relative_counts = True
-    ))
-    word_counts.commit(StreamingMultiHistogram.ArgsGlobal(
-        x_tickspacing=256,
-        x_label="Amount of pretokens",
-        x_lims=(None,3_000),
-
-        y_label="Examples",
-        relative_counts = True
-    ))
+    # text_length.commit(StreamingMultiHistogram.ArgsGlobal(
+    #     x_tickspacing=2500,
+    #     x_label="Amount of characters",
+    #     x_lims=(None,25_000),
+    #
+    #     y_label="Examples",
+    #     relative_counts = True
+    # ))
+    # word_counts.commit(StreamingMultiHistogram.ArgsGlobal(
+    #     x_tickspacing=256,
+    #     x_label="Amount of pretokens",
+    #     x_lims=(None,3_000),
+    #
+    #     y_label="Examples",
+    #     relative_counts = True
+    # ))
     token_counts.commit(StreamingMultiHistogram.ArgsGlobal(
         x_tickspacing=256,
         x_label="Amount of tokens",
@@ -82,15 +83,15 @@ def visualiseCounts(corpus: NamedIterable[str], tokeniser: Tokeniser, preprocess
         y_label="Examples",
         relative_counts = True
     ))
-    word_lengths.commit(StreamingMultiHistogram.ArgsGlobal(
-        x_label="Pretoken length",
-        x_tickspacing=1,
-        x_center_ticks=True,
-        x_lims=(1,32),
-
-        y_label="Pretokens",
-        relative_counts=True
-    ))
+    # word_lengths.commit(StreamingMultiHistogram.ArgsGlobal(
+    #     x_label="Pretoken length",
+    #     x_tickspacing=1,
+    #     x_center_ticks=True,
+    #     x_lims=(1,32),
+    #
+    #     y_label="Pretokens",
+    #     relative_counts=True
+    # ))
     token_lengths.commit(StreamingMultiHistogram.ArgsGlobal(
         x_label="Token length",
         x_tickspacing=1,

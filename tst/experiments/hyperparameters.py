@@ -266,30 +266,32 @@ def main_compareULM():
     """
     Compare stochastic ULM with deterministic ULM, specifically how much of the stochastic tokenisations match the deterministic ones.
     """
-    g = LineGraph("diffrate_ULM", caching=CacheMode.WRITE_ONLY)
+    g = LineGraph("diffrate_ULM", caching=CacheMode.IF_MISSING)
 
-    # Get corpus
-    _, _, validation_corpus = loadCorpus(CORPUS_ID)
-    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+    if g.needs_computation:
+        # Get corpus
+        _, _, validation_corpus = loadCorpus(CORPUS_ID)
+        iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
 
-    # Get metric
-    metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
+        # Get metric
+        metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
 
-    # Get tokenisers
-    deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
-    for a in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0, 4.0, 5.0]:
-        wprint(f"Comparing to ULM a={a}...")
-        stochastic = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
-        ratio, _, _ = metric.compare(deterministic, stochastic)
-        g.add(f"$|V| = {deterministic.getVocabSize()}$", a, 1-ratio)
+        # Get tokenisers
+        deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
+        for a in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0]:
+            wprint(f"Comparing to ULM a={a}...")
+            stochastic = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
+            ratio, _, _ = metric.compare(deterministic, stochastic)
+            g.add(f"$|V| = {deterministic.getVocabSize()}$", a, 1-ratio)
 
     g.commitWithArgs(
         LineGraph.ArgsGlobal(
             x_label=r"Normalisation power $\alpha$",
-            x_tickspacing=0.1,
+            x_tickspacing=0.2,
 
             y_label="Word regularisation rate vs. argmax ULM",
-            y_tickspacing=0.1
+            y_tickspacing=0.1,
+            legend_position="upper right"
         ),
         LineGraph.ArgsPerLine()
     )
@@ -322,7 +324,7 @@ def main_compareChosenBPEandULM():
 
 if __name__ == "__main__":
     if IS_NOT_LINUX:
-        main_compareBPE()
+        # main_compareBPE()
         main_compareULM()
     else:
         import argparse

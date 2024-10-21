@@ -2,7 +2,7 @@ ID_TO_CHECKPOINT = {
     1: "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44/checkpoint-512",
     2: "deberta-ULM_low_MLM_2024-10-15_02-40-37/checkpoint-512",
 
-    3: "deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-704",  # !!!
+    3: "deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-55/checkpoint-704",  # !!!
     4: "deberta-BPE+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-505",  # +-
     5: "deberta-BPE+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-506",  #+-
 
@@ -22,4 +22,4 @@ def finetuningCalls(task_id: int, h100: bool):
 
 
 if __name__ == "__main__":
-    finetuningCalls(task_id=10, h100=True)
+    finetuningCalls(task_id=7, h100=False)

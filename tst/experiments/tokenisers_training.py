@@ -11,9 +11,11 @@ from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceA
 
 if IS_NOT_LINUX:
     TRAINING_CORPUS_SIZE = 5000
-    VALIDATION_CORPUS_SIZE = 500
+    # VALIDATION_CORPUS_SIZE = 500
     # CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")  # Has no validation split
     CORPUS_ID = ("allenai/c4", "en")
+    VALIDATION_CORPUS_SIZE = 1_000  # For tuning the GRaMPa hyperparameters.
+    # CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
 else:
     TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
     VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
