@@ -95,12 +95,11 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
 
 
 def histogramShiftsWithTemperature(tk: RandomVocabSegmentation_GreedyMarkov, word: str, corpus: NamedIterable[str]):
-    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = tk.getName() + corpus.name
     n_chars = len("".join(tk.prepareAndTokenise(word)))
 
-    histo_across_amounts = StreamingMultiHistogram("amounts", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars),
+    histo_across_amounts = StreamingMultiHistogram(f"amounts_{word}_{tk.getName()}", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars),
                                                    caching=CacheMode.IF_MISSING)
-    token_counts = StreamingMultiHistogram("count-tokens",
+    token_counts = StreamingMultiHistogram(f"count-tokens_{corpus.name}_{tk.getName()}",
                                            BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
 
     renorm = tk.renormalisation

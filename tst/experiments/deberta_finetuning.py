@@ -43,10 +43,10 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         rank_by=rank_by,
 
         max_examples_phase_1=32*max_batches_at_size_32,
-        max_evals_phase_1=4096,
+        max_evals_phase_1=5,  # Eval 5 times and select the version with best loss. We don't really do the evals for patience in phase 1.
 
-        max_examples_phase_2=32*max_batches_at_size_32*10,
-        max_evals_phase_2=4096
+        max_examples_phase_2=32*16384,
+        max_evals_phase_2=32  # Eval every 512 batches.
     )
 
     tuner = TaskTuner(
