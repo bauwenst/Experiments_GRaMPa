@@ -35,6 +35,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         hp.EXAMPLES_PER_DEVICEBATCH = 16
     else:
         hp.WANDB_PROJECT = "wiat"
+        hp.store_in_hf_cache = True  # If you're fine-tuning 12 models at the same time, you want model checkpoints to land on the large storage partition.
         hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
 
     meta = MetaHyperparameters(
@@ -43,10 +44,10 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         rank_by=rank_by,
 
         max_examples_phase_1=32*max_batches_at_size_32,
-        max_evals_phase_1=5,  # Eval 5 times and select the version with best loss. We don't really do the evals for patience in phase 1.
+        minmax_evals_phase_1=5,  # Eval 5 times and select the version with best loss. We don't really do the evals for patience in phase 1.
 
         max_examples_phase_2=32*16384,
-        max_evals_phase_2=32  # Eval every 512 batches.
+        minmax_evals_phase_2=32  # Eval every 512 batches.
     )
 
     tuner = TaskTuner(
@@ -108,9 +109,9 @@ def getTypoSplitsById(typo_id: int) -> Set[str]:
 if __name__ == "__main__":
     hp = getDefaultHyperparameters()
     hp.EVALS_OF_PATIENCE = 5
+    hp.archit_basemodel_class = DebertaBaseModel
 
     if IS_NOT_LINUX:
-        hp.archit_basemodel_class = DebertaBaseModel
         checkpoint = (LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44" / "checkpoint-512").as_posix()
         n_samples = 3
         max_batches_at_bs32 = 128
@@ -120,8 +121,6 @@ if __name__ == "__main__":
         tokeniser, shorthand = getTokeniserByModelId(model_id)
         tokeniser = TktktToHuggingFace(tokeniser)
     else:
-        hp.archit_basemodel_class = DebertaBaseModel
-
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument("--n_samples", type=int)
