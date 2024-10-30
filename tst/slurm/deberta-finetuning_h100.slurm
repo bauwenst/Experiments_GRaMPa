@@ -12,4 +12,4 @@
 cd $VSC_DATA/Python/ExternalRepos/WiaT/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/deberta_finetuning.py --n_samples 5 --checkpoint $VSC_DATA/Python/ExternalRepos/WiaT/data/out/lamoto/checkpoints/$1 --old_model_id $2 --task_id $3 --typo_id 1
+PYTHONPATH=. python tst/experiments/deberta_finetuning.py --n_samples 5 --max_batches_at_bs32 512 --checkpoint $VSC_DATA/Python/ExternalRepos/WiaT/data/out/lamoto/checkpoints/$1 --old_model_id $2 --task_id $3 --typo_id 1
