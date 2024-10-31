@@ -17,7 +17,8 @@ class TyposLevenshtein1(MapWords):
                     Insert(0, sampler=sampler),
                     Pop(0, sampler=sampler)
                 ]
-            )
+            ),
+            mapping_name="typosLD1"
         )
 
 

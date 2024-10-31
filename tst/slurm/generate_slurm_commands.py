@@ -15,11 +15,12 @@ ID_TO_CHECKPOINT = {
 }
 
 
-def finetuningCalls(task_id: int, h100: bool):
+def finetuningCalls(task_id: int, h100: bool, typo_id: int=None):
     device = "h100" if h100 else "a100"
     for id, path in ID_TO_CHECKPOINT.items():
-        print(f"sbatch deberta-finetuning_{device}.slurm \"{path}\" {id} {task_id}")
+        print(f"sbatch deberta-finetuning_{device}.slurm \"{path}\" {id} {task_id}" + (f" {typo_id}" if typo_id else ""))
 
 
 if __name__ == "__main__":
-    finetuningCalls(task_id=7, h100=False)
+    finetuningCalls(task_id=12, h100=True)
+    
