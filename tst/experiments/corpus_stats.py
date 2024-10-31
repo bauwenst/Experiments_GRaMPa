@@ -28,6 +28,7 @@ def main(tk: Tokeniser):
 
 
 if __name__ == "__main__":
+    from tst.constants import *
     # switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, t=1.0, l=1)
     # main(switch.subtokenisers[0])
     # main(switch.subtokenisers[1])
@@ -42,12 +43,12 @@ if __name__ == "__main__":
     # main(switch.subtokenisers[1])
     # switch = createTokeniser_SwitchyGrampa_BPE(t=-0.1, l=2)
     # main(switch.subtokenisers[1])
-    bpe = Build_English_BPE(dropout=0.1).buildTokeniser()
+    bpe = Build_English_BPE(dropout=BPEDROPOUT_P).buildTokeniser()
     main(bpe)
 
-    # kudo = Build_English_Kudo(kbest=64, alpha=0.1).buildTokeniser()
+    # kudo = Build_English_Kudo(kbest=ULM_K, alpha=0.1).buildTokeniser()
     # main(kudo)
-    # kudo = Build_English_Kudo(kbest=64, alpha=0.5).buildTokeniser()
+    # kudo = Build_English_Kudo(kbest=ULM_K, alpha=0.5).buildTokeniser()
     # main(kudo)
-    # kudo = Build_English_Kudo(kbest=64, alpha=1.0).buildTokeniser()
+    # kudo = Build_English_Kudo(kbest=ULM_K, alpha=1.0).buildTokeniser()
     # main(kudo)

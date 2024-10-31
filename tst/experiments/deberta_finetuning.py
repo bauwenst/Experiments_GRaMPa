@@ -1,4 +1,5 @@
 from tst.preamble import *
+from tst.constants import *
 from tst.experiments.tokenisers_instances import getTokeniserByModelId
 
 from typing import Set, Tuple
@@ -26,7 +27,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         raise ValueError("At least one hyperparameter sample must be taken.")
 
     if typo_splits:
-        task = TaskWithTypos(task, text_fields=text_fields, splits=typo_splits, p=0.10)
+        task = TaskWithTypos(task, text_fields=text_fields, splits=typo_splits, p=TYPO_P)
 
     hp.MODEL_CONFIG_OR_CHECKPOINT = deberta_checkpoint
     hp.TOKENISER = tokeniser

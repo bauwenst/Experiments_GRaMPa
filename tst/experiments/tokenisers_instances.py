@@ -1,4 +1,5 @@
 from tst.preamble import *
+# from tst.constants import *  # ---> The constants are not used in this file because EVEN when the constants change, the tokenisers don't.
 from tst.experiments.tokenisers_training import MARKER
 
 from typing import Tuple
@@ -145,10 +146,10 @@ def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain,
     """
     if model_id == 1:  # 150 seconds == 2.5 minutes per batch.
         tokeniser = Build_English_BPE(dropout=0.1).buildTokeniser()
-        shorthand = "BPE-dropout"
+        shorthand = "BPE-dropout-0.1"
     elif model_id == 2:
         tokeniser = Build_English_Kudo(kbest=64, alpha=0.15).buildTokeniser()
-        shorthand = "ULM"
+        shorthand = "ULM-64-0.15"
     elif model_id in {3, 4, 5, 9}:
         if model_id == 3:
             temperature    = +1.0

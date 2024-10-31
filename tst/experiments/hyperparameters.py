@@ -298,6 +298,8 @@ def main_compareULM():
 
 
 def main_compareChosenBPEandULM():
+    from tst.constants import BPEDROPOUT_P, ULM_K, ULM_ALPHA
+
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID, validation_size=1000)
     iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
@@ -306,15 +308,15 @@ def main_compareChosenBPEandULM():
     metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
 
     # Get tokenisers
-    p = 0.1  # Maximal RE and also recommended by the paper based on BLEU.
+    p = BPEDROPOUT_P  # 0.1 is the value with maximal Renyi efficiency, and also recommended by the dropout paper based on BLEU.
     deterministic = Build_English_BPE(dropout=0.0).buildTokeniser()
     stochastic    = Build_English_BPE(dropout=p).buildTokeniser()
     ratio, _, _ = metric.compare(deterministic, stochastic)
     print(f"BPE vs BPE-dropout({p}):", ratio)
 
-    a = 0.3  # Inflection point of RE, used by Cognetta, and between Kudo's recommended 0.2 and 0.5.
+    a = ULM_ALPHA  # 0.15 has RR of 50%. Alternatively, 0.3 is the inflection point of Renyi efficiency, used by Cognetta, and between Kudo's recommended 0.2 and 0.5.
     deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
-    stochastic    = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
+    stochastic    = Build_English_Kudo(kbest=ULM_K, alpha=a).buildTokeniser()
     ratio, _, _ = metric.compare(deterministic, stochastic)
     print(f"ULM(k=1) vs ULM(k=64,a={a}):", ratio)
 

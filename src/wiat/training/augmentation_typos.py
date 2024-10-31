@@ -6,7 +6,7 @@ from tktkt.preparation.perturbers import *
 
 
 class TyposLevenshtein1(MapWords):
-    def __init__(self, text_field_name: str, p: float=0.10):
+    def __init__(self, text_field_name: str, p: float):
         sampler = ConstantSampler(n=1)
         super().__init__(
             text_field_name=text_field_name,

@@ -1,5 +1,6 @@
 from tst.preamble import *
-from tst.experiments.tokenisers_instances import getTokeniserByModelId
+from tst.constants import *
+from tst.experiments.tokenisers_instances import *
 
 from transformers import PreTrainedTokenizerBase
 from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, DebertaConfig
@@ -7,24 +8,25 @@ from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, Deb
 from wiat.training.archit_base import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
-from lamoto.trainer.hyperparameters import Intervals, EveryNMinutes, EveryNDescents, AfterNDescents
+from lamoto.training.auxiliary.hyperparameters import Intervals, EveryNMinutes, EveryNDescents, AfterNDescents
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
 from tktkt.util.environment import IS_NOT_LINUX
+from tktkt.interfaces.huggingface import TktktToHuggingFace
 
 
 def makeConfig(tk: PreTrainedTokenizerBase) -> DebertaConfig:
     config = DebertaConfig.from_pretrained("microsoft/deberta-base")
-    H = 512
+    H = DEBERTA_HIDDEN_SIZE
     config.hidden_size = H
     config.intermediate_size   = H*4    # https://arxiv.org/pdf/1908.08962
     config.num_attention_heads = H//64  # https://arxiv.org/pdf/1908.08962
 
-    config.num_hidden_layers = 6
-    config.max_relative_positions = 512
+    config.num_hidden_layers = DEBERTA_LAYERS
+    config.max_relative_positions = DEBERTA_K
     config.vocab_size = len(tk.get_vocab())
     config.tie_word_embeddings = True
 
-    config.max_position_embeddings = 1024  # (Note: the 1024 you see in the relative positional embeddings matrix is 2*k, not this number, see docs of DebertaConfig.) The whole point of the paper is "help this tokeniser has a lot of tokens", so if we're going to truncate it better be decently far out. Can't be too far nevertheless, because pushing a full context through should still be feasible (in fact, that's what happens in packing). The use of relative embeddings means that we don't need to worry about the exact number and could arguably alter it at test time.
+    config.max_position_embeddings = DEBERTA_CONTEXT_LIMIT  # (Note: the 1024 you see in the relative positional embeddings matrix is 2*k, not this number, see docs of DebertaConfig.) The whole point of the paper is "help this tokeniser has a lot of tokens", so if we're going to truncate it better be decently far out. Can't be too far nevertheless, because pushing a full context through should still be feasible (in fact, that's what happens in packing). The use of relative embeddings means that we don't need to worry about the exact number and could arguably alter it at test time.
     return config
 
 
@@ -82,13 +84,10 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
 
 
 if __name__ == "__main__":
-    from tktkt.interfaces.huggingface import TktktToHuggingFace
-    from tst.experiments.tokenisers_instances import *
-
     if IS_NOT_LINUX:
-        tk = Build_English_BPE(dropout=0.1).buildTokeniser()
-        tk_name = "BPE-dropout"
-        deberta_pretraining(TktktToHuggingFace(tk), tk_name, low_resource=True)
+        model_id = 1
+        low_res = True
+        continue_from = None
     else:
         # Get model ID and low-resourcedness from command line
         import argparse
@@ -98,11 +97,15 @@ if __name__ == "__main__":
         parser.add_argument("--continue_from", type=str)
         args = parser.parse_args()
 
-        # This is all you need.
-        tokeniser, shorthand = getTokeniserByModelId(args.model_id)
-        deberta_pretraining(
-            TktktToHuggingFace(tokeniser),
-            tk_name=shorthand,
-            low_resource=args.low_resource,
-            continue_from_checkpoint=args.continue_from
-        )
+        model_id = args.model_id
+        low_res = args.low_resource
+        continue_from = args.continue_from
+
+    # This is all you need.
+    tokeniser, shorthand = getTokeniserByModelId(model_id)
+    deberta_pretraining(
+        TktktToHuggingFace(tokeniser),
+        tk_name=shorthand,
+        low_resource=low_res,
+        continue_from_checkpoint=continue_from
+    )
