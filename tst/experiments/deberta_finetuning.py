@@ -37,7 +37,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     else:
         hp.WANDB_PROJECT = "wiat"
         hp.store_in_hf_cache = True  # If you're fine-tuning 12 models at the same time, you want model checkpoints to land on the large storage partition.
-        hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
+        hp.EXAMPLES_PER_DEVICEBATCH = 128 if not task.task_name.lower().startswith("dp") else 64  # Even when packing 1024 tokens per example, 128 fits on an A100 with 94% VRAM usage though. The problem with DP is that it has fragmentation issues in very high epochs (~12) at batch size 128.
 
     meta = MetaHyperparameters(
         meta_seed=hp.SEED + task_id + abs(hash(tk_name)),  # HPs are reproducible given the same tokeniser and task and seed.
@@ -47,8 +47,8 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
         max_examples_phase_1=32*max_batches_at_size_32,
         minmax_evals_phase_1=5,  # Eval 5 times and select the version with best loss. We don't really do the evals for patience in phase 1.
 
-        max_examples_phase_2=32*16384,
-        minmax_evals_phase_2=32  # Eval every 512 batches.
+        max_examples_phase_2=32*16384,  # Run for at most 16384 batches of size 32.
+        minmax_evals_phase_2=32  # Eval every 512 batches at batch size 32 (which has 16384 batches, so 16384/32 = 512).
     )
 
     tuner = TaskTuner(
