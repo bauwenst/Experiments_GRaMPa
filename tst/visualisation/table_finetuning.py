@@ -179,7 +179,11 @@ def tableFromTasksToModelsToResults(tasks_to_models_to_results: Results):
         default_column_style=ColumnStyle(
             do_bold_maximum=True,
             cell_prefix=r"\tgrad[0.0][0.5][1.0]{", cell_suffix="}",
-            cell_default_if_empty=r"\cellcolor{black!10}")
+            cell_default_if_empty=r"\cellcolor{black!10}"),
+        alternate_column_styles={(SEQUENCELEVEL_NAME,COLA,TASKS_TO_METRICS_TO_RESULTS_TO_FORMATTED[COLA]["matthews_correlation"]["matthews_correlation"]): ColumnStyle(
+            do_bold_maximum=True,
+            cell_prefix=r"\tgrad[-1.0][0.0][1.0]{", cell_suffix="}",
+        )}
     )
 
 
@@ -211,7 +215,7 @@ def parseWandbCsv(csv_path: Path) -> Results:
                     print("Unparsable name:", name)
                     continue
             elif BPE in name:
-                p = 0.1  # TODO: I should probably add the value of p to the pretraining shorthand, come to think of it.
+                p = 0.1
                 key = orderKeyFields(tokeniser=BPEdropout, constraint="", skew=fr"$p={p}$", vocab=BPE)
             elif ULM in name:
                 k = 64

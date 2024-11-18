@@ -22,5 +22,4 @@ def finetuningCalls(task_id: int, h100: bool, typo_id: int=None):
 
 
 if __name__ == "__main__":
-    finetuningCalls(task_id=12, h100=True)
-    
+    finetuningCalls(task_id=1, h100=True)

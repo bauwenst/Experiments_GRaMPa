@@ -7,7 +7,8 @@ from transformers import PreTrainedTokenizerBase
 
 from tktkt.interfaces.huggingface import TktktToHuggingFace
 from tktkt.util.environment import IS_NOT_LINUX
-from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig, BaseModelExtendedConfig
+from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig
+from archit.instantiation.extensions import PoolingAndStridingConfig
 from archit.instantiation.abstracts import HeadConfig
 from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, TaskHyperparameters
 from lamoto.tasks._core import Task, RankingMetricSpec
@@ -64,7 +65,7 @@ def getTaskById(task_id: int) -> Tuple[Task, HeadConfig, RankingMetricSpec, Set[
     t = TokenClassificationHeadConfig()
     s = SequenceClassificationHeadConfig()
     d = DependencyParsingHeadConfig(
-        extended_model_config=BaseModelExtendedConfig(stride=1024)
+        extended_model_config=PoolingAndStridingConfig(stride=1024)
     )
     if task_id == 1:
         return CoLA(), s, RankingMetricSpec("matthews_correlation", "matthews_correlation", True), {"sentence"}

@@ -14,6 +14,8 @@ from csv import DictReader
 import re
 
 from fiject import Table, ColumnStyle, CacheMode
+from tktkt.util.printing import rprint
+
 
 ###
 # Input strings: these are used to parse the data.
@@ -53,7 +55,7 @@ class KeyEntry(Enum):
 KEY_ORDER = [KeyEntry.VOCAB, KeyEntry.TOKENISER, KeyEntry.CONSTRAINT, KeyEntry.SKEW]
 
 # Column ordering
-WRAPPER_ORDER = [TYPOS_TEST, TYPOS_TRAINTEST, None, TYPOS_TRAIN]
+WRAPPER_ORDER = [TYPOS_TEST, TYPOS_TRAINTEST, TYPOS_TRAIN, None]
 
 # Output strings
 FORMATTED_TYPOS = {
@@ -156,11 +158,6 @@ def parseWandbCsv(csv_path: Path) -> Results:
             task_name = find_task.search(model_name).group(1)
             wrapper   = find_task.search(model_name).group(3)  # Can be None and that's also valid.
 
-            ### The old DP runs had a lower max runtime. We have one accidental run from November 3 that does much better because it finetuned for longer.
-            if TASK == "DP"  and  wrapper is None  and  "2024-11-03" in find_task.search(model_name).group(4):
-                continue
-            ###
-
             task_results = {k.replace("/", "_"): float(v) for k,v in row.items() if "test" in k and "" != v}
             if not task_results:
                 continue
@@ -174,11 +171,12 @@ def parseWandbCsv(csv_path: Path) -> Results:
                 task_to_rows_to_results[task_name][wrapper] = dict()
 
             if key in task_to_rows_to_results[task_name][wrapper]:
-                print("Found duplicate results:")
-                print(task_name, wrapper)
-                print(key)
-                print("\tOld:", task_to_rows_to_results[task_name][wrapper][key])
-                print("\tNew:", task_results)
+                print("\nFound duplicate key:")
+                print("Task:", task_name, wrapper)
+                print("Key:", key)
+                print("\t Existing:", task_to_rows_to_results[task_name][wrapper][key])
+                print("\tDiscarded:", task_results)
+                print("\twith raw name:", model_name)
                 continue
 
             task_to_rows_to_results[task_name][wrapper][key] = task_results
@@ -199,7 +197,8 @@ def tableFromTasksToModelsToResults(tasks_to_wrappers_to_models_to_results: Resu
             models = models_to_results.keys()
             rows.update(models)
 
-    print(tasks_to_wrappers_to_models_to_results)
+    print("\nParsed results:")
+    rprint(tasks_to_wrappers_to_models_to_results)
     if TASK not in tasks_to_wrappers_to_models_to_results:
         raise RuntimeError(f"{TASK} not in results...")
 
