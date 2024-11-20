@@ -58,11 +58,21 @@ KEY_ORDER = [KeyEntry.VOCAB, KeyEntry.TOKENISER, KeyEntry.CONSTRAINT, KeyEntry.S
 WRAPPER_ORDER = [TYPOS_TEST, TYPOS_TRAINTEST, TYPOS_TRAIN, None]
 
 # Output strings
+
+# def formatTypo(yes=False, train=False) -> str:
+#     return r"\checkmark" if yes else r"$\times$"
+# TYPO_SEP = " / "
+
+def formatTypo(yes: bool, train: bool) -> str:
+    split = "tr" if train else "te"
+    return r"\typo{" + split + "}" if yes else split
+TYPO_SEP = "/"
+
 FORMATTED_TYPOS = {
-    TYPOS_NONE:      r"$\times$ / $\times$",
-    TYPOS_TRAIN:     r"\checkmark / $\times$",
-    TYPOS_TEST:      r"$\times$ / \checkmark",
-    TYPOS_TRAINTEST: r"\checkmark / \checkmark"
+    TYPOS_NONE:      formatTypo(False,True) + TYPO_SEP + formatTypo(False,False),
+    TYPOS_TRAIN:     formatTypo(True,True)  + TYPO_SEP + formatTypo(False,False),
+    TYPOS_TEST:      formatTypo(False,True) + TYPO_SEP + formatTypo(True,False),
+    TYPOS_TRAINTEST: formatTypo(True,True)  + TYPO_SEP + formatTypo(True,False)
 }
 FORMATTED_RESULTS = {
     "uas": "UAS",

@@ -1,3 +1,5 @@
+from tktkt.util.printing import rprint
+
 from tst.preamble import *
 
 from enum import Enum
@@ -37,7 +39,7 @@ WNLI = "wnli"
 STSB = "stsb"
 POS  = "pos"
 NER  = "ner"
-DP   = "DP"
+DP   = "dp"
 
 # Regexes
 find_grampa_temperature = re.compile("t=(.+?),")
@@ -67,7 +69,7 @@ SEQUENCELEVEL_NAME = "Sequence-level"
 
 FAMILY_ORDER        = [TOKENLEVEL_NAME, SEQUENCELEVEL_NAME]
 TOKENLEVEL_ORDER    = [POS, NER, DP]
-SEQUENCELEVEL_ORDER = [SST2, QQP, MRPC, RTE, WNLI, QNLI, MNLI, COLA, STSB]
+SEQUENCELEVEL_ORDER = [SST2, QQP, MRPC, RTE, WNLI, COLA]  # QNLI, MNLI, STSB
 
 FAMILY_TO_TASKS = {
     TOKENLEVEL_NAME: TOKENLEVEL_ORDER,
@@ -138,6 +140,10 @@ def formatTaskName(task: str) -> str:
         return "SST-2"
     elif task == STSB:
         return "STS-B"
+    elif task == COLA:
+        return "CoLA"
+    elif task == POS:
+        return "PoS"
     else:
         return task.upper()
 
@@ -154,7 +160,7 @@ def tableFromTasksToModelsToResults(tasks_to_models_to_results: Results):
         models = models_to_results.keys()
         rows.update(models)
 
-    print(tasks_to_models_to_results)
+    rprint(tasks_to_models_to_results)
 
     # Sort the keys and interpret the results into columns.
     for row in sorted(rows, key=stringKeyToNumberKey):
@@ -180,10 +186,11 @@ def tableFromTasksToModelsToResults(tasks_to_models_to_results: Results):
             do_bold_maximum=True,
             cell_prefix=r"\tgrad[0.0][0.5][1.0]{", cell_suffix="}",
             cell_default_if_empty=r"\cellcolor{black!10}"),
-        alternate_column_styles={(SEQUENCELEVEL_NAME,COLA,TASKS_TO_METRICS_TO_RESULTS_TO_FORMATTED[COLA]["matthews_correlation"]["matthews_correlation"]): ColumnStyle(
-            do_bold_maximum=True,
-            cell_prefix=r"\tgrad[-1.0][0.0][1.0]{", cell_suffix="}",
-        )}
+        # This alternate column style probably makes no sense. If you have a perfectly -1 correlation between labels and predictions, you have a perfect classifier, not a terrible classifier.
+        # alternate_column_styles={(SEQUENCELEVEL_NAME,formatTaskName(COLA),TASKS_TO_METRICS_TO_RESULTS_TO_FORMATTED[COLA]["matthews_correlation"]["matthews_correlation"]): ColumnStyle(
+        #     do_bold_maximum=True,
+        #     cell_prefix=r"\tgrad[-1.0][0.0][1.0]{", cell_suffix="}",
+        # )}
     )
 
 
@@ -196,46 +203,39 @@ def parseWandbCsv(csv_path: Path) -> Results:
     with open(csv_path, "r", encoding="utf-8") as handle:
         reader = DictReader(handle)
         for row in reader:
-            name = row["Name"]
+            model_name = row["Name"]
             # First get the table key
-            if GRAMPA in name:
-                t = float(find_grampa_temperature.search(name).group(1))
-                l = int(find_grampa_length.search(name).group(1))
+            if GRAMPA in model_name:
+                t = float(find_grampa_temperature.search(model_name).group(1))
+                l = int(find_grampa_length.search(model_name).group(1))
 
                 ### We didn't actually train such models; this is a labelling error.
                 if t == 1.0 and l == 1:
                     continue
                 ###
 
-                if BPE + "+" in name:
+                if BPE + "+" in model_name:
                     key = orderKeyFields(tokeniser=GRAMPA, constraint=r"$\ell_\text{min}=" + f"{l}$", skew=fr"$\tau={t}$", vocab=BPE)
-                elif ULM + "+" in name:
+                elif ULM + "+" in model_name:
                     key = orderKeyFields(tokeniser=GRAMPA, constraint=r"$\ell_\text{min}=" + f"{l}$", skew=fr"$\tau={t}$", vocab=ULM)
                 else:
-                    print("Unparsable name:", name)
+                    print("Unparsable name:", model_name)
                     continue
-            elif BPE in name:
+            elif BPE in model_name:
                 p = 0.1
                 key = orderKeyFields(tokeniser=BPEdropout, constraint="", skew=fr"$p={p}$", vocab=BPE)
-            elif ULM in name:
+            elif ULM in model_name:
                 k = 64
                 a = 0.15
                 key = orderKeyFields(tokeniser=ULM, constraint=fr"$k={k}$", skew=fr"$\alpha={a}$", vocab=ULM)
             else:
-                print("Unparsable name:", name)
+                print("Unparsable name:", model_name)
                 continue
-            task_name = find_task.search(name).group(1)
-
-            ### Severely undertrained
-            if task_name == STSB:
-                continue
-            ###
+            task_name = find_task.search(model_name).group(1).lower()
 
             task_results = {k.replace("/", "_"): float(v) for k,v in row.items() if "test" in k and "" != v}
             if not task_results:
                 continue
-
-            assert row["Tags"] == task_name
 
             # print("Found row", key, "for task", task_name)
             # print("\t", task_results)
@@ -246,8 +246,9 @@ def parseWandbCsv(csv_path: Path) -> Results:
                 print("Found duplicate results:")
                 print(task_name)
                 print(key)
-                print("\tOld:", task_to_rows_to_results[task_name][key])
-                print("\tNew:", task_results)
+                print("\t Existing:", task_to_rows_to_results[task_name][key])
+                print("\tDiscarded:", task_results)
+                print("\twith raw name:", model_name)
                 continue
 
             task_to_rows_to_results[task_name][key] = task_results
@@ -325,4 +326,4 @@ def lamotoToTable(folder: Path):
 if __name__ == "__main__":
     # EVALUATIONS = LamotoPaths.pathToEvaluations()
     # lamotoToTable(EVALUATIONS)
-    wandbToTable(PATH_DATA_OUT / "wandb-2.csv")
+    wandbToTable(PATH_DATA_OUT / "wandb-3.csv")
