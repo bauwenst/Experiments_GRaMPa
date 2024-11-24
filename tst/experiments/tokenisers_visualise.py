@@ -10,7 +10,7 @@ from tktkt.util.types import NamedIterable
 
 from bpe_knockout import morphologyGenerator, KnockoutDataConfiguration, setupEnglish
 
-from fiject import LineGraph
+from fiject import LineGraph, MultiHistogram, BinSpec, StreamingVariableGranularityHistogram, BinOverlapMode, FIJECT_DEFAULTS
 
 
 def main_BPE_corpus(word_corpus: NamedIterable[str]):
@@ -94,7 +94,7 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
     )
 
 
-def histogramShiftsWithTemperature(tk: RandomVocabSegmentation_GreedyMarkov, word: str, corpus: NamedIterable[str]):
+def plot_histogramShiftsWithTemperature(tk: RandomVocabSegmentation_GreedyMarkov, word: str, corpus: NamedIterable[str]):
     n_chars = len("".join(tk.prepareAndTokenise(word)))
 
     histo_across_amounts = StreamingMultiHistogram(f"amounts_{word}_{tk.getName()}", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars),
@@ -143,7 +143,7 @@ def histogramShiftsWithTemperature(tk: RandomVocabSegmentation_GreedyMarkov, wor
     ))
 
 
-def segmentalityGraph(tk: Tokeniser, word_corpus: NamedIterable[str], n_samples: int=100):
+def plot_segmentality(tk: Tokeniser, word_corpus: NamedIterable[str], n_samples: int=100):
     segmentality = VariableGranularityHistogram(f"{tk.getName()}_{word_corpus.name}_{n_samples}_segmentality", caching=CacheMode.WRITE_ONLY)
 
     if segmentality.needs_computation:
@@ -161,32 +161,116 @@ def segmentalityGraph(tk: Tokeniser, word_corpus: NamedIterable[str], n_samples:
     ))
 
 
+def plot_fertilities(tokenisers: List[Tuple[Tokeniser,str]], raw_words: NamedIterable[str], exclude_words_over_length: int=60,
+                     do_boxplots: bool=False):
+    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = raw_words.name
+
+    graph_lengths = MultiHistogram("token-length")
+    graph_amounts = MultiHistogram("amounts")
+    graph_cpt     = MultiHistogram("cpt")
+    # graph_segmentality = MultiHistogram("segmentality")
+    graph_segmentality = StreamingVariableGranularityHistogram("segmentality", BinSpec.closedFromAmount(0,1,amount=30))
+
+    for raw_word in raw_words:
+        if len(raw_word) > exclude_words_over_length or len(raw_word) < 2:
+            continue
+
+        for tokeniser,name in tokenisers:
+            tokens = tokeniser.prepareAndTokenise(raw_word)
+
+            n_chars = 0
+            for l in map(len, tokens):
+                graph_lengths.add(name, l)
+                n_chars += l
+            n_tokens = len(tokens)
+            graph_amounts.add(name, n_tokens)
+            graph_cpt    .add(name, n_chars/n_tokens)
+            # graph_segmentality.add(name, (n_tokens-1)/(n_chars-1))
+            graph_segmentality.add(n_tokens-1, n_chars, class_name=name)
+
+    if do_boxplots:
+        graph_lengths.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        graph_amounts.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        graph_cpt    .commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        # graph_segmentality.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+    else:
+        graph_lengths.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+            x_label="Token length",
+            center_ticks=True,
+
+            y_label="Fraction of tokens",
+            relative_counts=True
+        ))
+        graph_amounts.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+            x_label="Amount of tokens",
+            center_ticks=True,
+
+            y_label="Fraction of words",
+            relative_counts=True
+        ))
+        # graph_cpt.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+        #     x_label="Characters-per-token ratio",
+        #     binwidth=0.025,
+        #
+        #     y_label="Fraction of words",
+        #     relative_counts=True
+        # ))
+        # graph_segmentality.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+        #     x_label="Segmentality",
+        #     binwidth=0.025,
+        #
+        #     y_label="Spread across words",
+        #     relative_counts=True
+        # ))
+        graph_segmentality.commit(StreamingVariableGranularityHistogram.ArgsGlobal(
+            x_label="Segmentality",
+            x_tickspacing=0.1,
+            histo_overlapping=BinOverlapMode.SIDE_BY_SIDE,
+
+            y_label="Spread across words",
+            relative_counts=True
+        ))
+        print(graph_segmentality.getSummaries())
+
+    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = ""
+
 
 if __name__ == "__main__":
-    tk = createTokeniser_SwitchyGrampa_BPE(t=1.0, l=1).subtokenisers[1]
-    assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
-    tk.enableInfiniteDomain(enable=False)
-
-    ###
-
     from typing import Iterable
     class DummyIterableThatJustMakesGenerators(Iterable):
         def __iter__(self):
             with KnockoutDataConfiguration(setupEnglish()):
-                return take(10_000,keepFirst(o.word for o in morphologyGenerator(verbose=True)))
+                return keepFirst(o.word for o in morphologyGenerator(verbose=True))
     word_corpus = NamedIterable(DummyIterableThatJustMakesGenerators(), name="celex-en-lemmata")
-    segmentalityGraph(tk, word_corpus)
+
+    # tk = createTokeniser_SwitchyGrampa_BPE(t=1.0, l=1).subtokenisers[1]
+    # assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
+    # tk.enableInfiniteDomain(enable=False)
+    # plot_segmentality(tk, word_corpus)
 
     ###
 
-    _,_,validation = loadCorpus(CORPUS_ID)
-    corpus = NamedIterable(validation, name=validation.info.dataset_name).map(lambda example: example["text"])
-    word = "antidisestablishmentarianism"
-    histogramShiftsWithTemperature(tk, word, corpus)
+    # _,_,validation = loadCorpus(CORPUS_ID)
+    # corpus = NamedIterable(validation, name=validation.info.dataset_name).map(lambda example: example["text"])
+    # word = "antidisestablishmentarianism"
+    # plot_histogramShiftsWithTemperature(tk, word, corpus)
 
     # main_GRaMPa_word(word, unconstrained=True)
     # main_BPE_corpus(corpus)
     # main_GRaMPa_corpus(corpus, unconstrained=True)
+
+    # TODO: Also test the two separate halves of the switchy tokenisers. That is:
+    #   - BPE-0.0
+    #   - ULM-1
+    #   - GRaMPa-1.0-BPE
+    #   - GRaMPa-5.0-BPE
+    #   - GRaMPa-10.0-BPE
+    #   - GRaMPa-1.0-ULM
+    #   - GRaMPa-5.0-ULM
+    #   - GRaMPa-10.0-ULM
+    from tst.experiments.tokenisers_instances import getTokeniserByModelId
+    tokenisers = [getTokeniserByModelId(model_id=i) for i in range(1,8+1)]
+    plot_fertilities(tokenisers, raw_words=word_corpus)
 
     # visualiseCharsVersusTokensRelationships(
     #     tokeniser=tk,
