@@ -111,13 +111,13 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
 
 
 def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> Tuple[float,float]:
-    tk = Build_English_BPE(dropout=0).buildTokeniser()
+    tk = Factory_BPE(dropout=0).buildTokeniser()
     tk._dropout_as_string = "p"
     g = LineGraph(f"renyi_dropout_{tk.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
     if g.needs_computation:
         for p in dropout_grid:
             wprint(f"Now testing dropout p={p}...")
-            tk = Build_English_BPE(dropout=p).buildTokeniser()
+            tk = Factory_BPE(dropout=p).buildTokeniser()
 
             unigram_distribution = tokenDistributionFromSentences(tk, corpus)
             low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
@@ -145,7 +145,7 @@ def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> 
 
 def main_alphas():
     # Get tokeniser
-    kudo = Build_English_Kudo(kbest=64, alpha=0).buildTokeniser()
+    kudo = Factory_KudoPiece(kbest=64, alpha=0).buildTokeniser()
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
@@ -243,10 +243,10 @@ def main_compareBPE():
     metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
 
     # Get tokenisers
-    deterministic = Build_English_BPE(dropout=0.0).buildTokeniser()
+    deterministic = Factory_BPE(dropout=0.0).buildTokeniser()
     for p in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
         wprint(f"Comparing to BPE p={p}...")
-        stochastic = Build_English_BPE(dropout=p).buildTokeniser()
+        stochastic = Factory_BPE(dropout=p).buildTokeniser()
         ratio, _, _ = metric.compare(deterministic, stochastic)
         g.add(f"$|V| = {deterministic.getVocabSize()}$", p, 1-ratio)
 
@@ -277,10 +277,10 @@ def main_compareULM():
         metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
 
         # Get tokenisers
-        deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
+        deterministic = Factory_KudoPiece(kbest=1, alpha=1.0).buildTokeniser()
         for a in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0]:
             wprint(f"Comparing to ULM a={a}...")
-            stochastic = Build_English_Kudo(kbest=64, alpha=a).buildTokeniser()
+            stochastic = Factory_KudoPiece(kbest=64, alpha=a).buildTokeniser()
             ratio, _, _ = metric.compare(deterministic, stochastic)
             g.add(f"$|V| = {deterministic.getVocabSize()}$", a, 1-ratio)
 
@@ -309,14 +309,14 @@ def main_compareChosenBPEandULM():
 
     # Get tokenisers
     p = BPEDROPOUT_P  # 0.1 is the value with maximal Renyi efficiency, and also recommended by the dropout paper based on BLEU.
-    deterministic = Build_English_BPE(dropout=0.0).buildTokeniser()
-    stochastic    = Build_English_BPE(dropout=p).buildTokeniser()
+    deterministic = Factory_BPE(dropout=0.0).buildTokeniser()
+    stochastic    = Factory_BPE(dropout=p).buildTokeniser()
     ratio, _, _ = metric.compare(deterministic, stochastic)
     print(f"BPE vs BPE-dropout({p}):", ratio)
 
     a = ULM_ALPHA  # 0.15 has RR of 50%. Alternatively, 0.3 is the inflection point of Renyi efficiency, used by Cognetta, and between Kudo's recommended 0.2 and 0.5.
-    deterministic = Build_English_Kudo(kbest=1, alpha=1.0).buildTokeniser()
-    stochastic    = Build_English_Kudo(kbest=ULM_K, alpha=a).buildTokeniser()
+    deterministic = Factory_KudoPiece(kbest=1, alpha=1.0).buildTokeniser()
+    stochastic    = Factory_KudoPiece(kbest=ULM_K, alpha=a).buildTokeniser()
     ratio, _, _ = metric.compare(deterministic, stochastic)
     print(f"ULM(k=1) vs ULM(k=64,a={a}):", ratio)
 

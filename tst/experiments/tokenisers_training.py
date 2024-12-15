@@ -1,13 +1,16 @@
 from tst.preamble import *
 
+from typing import Tuple
 from datasets import load_dataset, IterableDataset, IterableDatasetDict
 
 from tktkt.util.timing import datetimeDashed
 from tktkt.util.environment import IS_NOT_LINUX
 from tktkt.preparation.instances import *
 from tktkt.models.bpe.vocabularisation import BPEVocabulariser, BpeTrainerImplementation
-from tktkt.models.kudopiece.vocabularisation import KudoPieceTrainer, KudoPieceArguments_Algorithm, KudoPieceArguments_Alphabet
+from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser, KudoPieceArguments
 
+
+TRUNCATE_INPUT_AFTER = 8192
 
 if IS_NOT_LINUX:
     TRAINING_CORPUS_SIZE = 5000
@@ -56,10 +59,10 @@ def trainBPE():
     if imp == BpeTrainerImplementation.BPEASY:
         preprocessor = ModernEnglishPreprocessor_ByteCompatible(marker=MARKER)
     else:
-        preprocessor = SentencePiecePreprocessor(marker=MARKER)
+        preprocessor = SentencePiecePreprocessor_SpaceConcatenable(MARKER.location)
     vocabulariser = BPEVocabulariser(preprocessor=preprocessor, implementation=imp,
-                                     boundary_marker=MARKER, byte_based=True,
-                                     vocab_size=VOCAB_SIZE, max_length=MAX_LENGTH)
+                                     vocab_size=VOCAB_SIZE, max_token_length=MAX_LENGTH,
+                                     skip_sentences_over_length=TRUNCATE_INPUT_AFTER)
     _, train_corpus, _ = loadCorpus(CORPUS_ID)
     vocabulariser.vocabulariseFromHf(train_corpus, text_field="text")
 
@@ -69,16 +72,12 @@ def trainKudo():
     Takes about an hour to get through a 750k corpus (250 it/s => 3k seconds).
     Very high memory consumption (80 GiB per million sentences).
     """
-    vocabulariser = KudoPieceTrainer(
-        preprocessor=SentencePiecePreprocessor(marker=MARKER),
-        final_vocab_size=VOCAB_SIZE, word_boundary_location=MARKER.location,
-        alphabet_arguments=KudoPieceArguments_Alphabet(
-            required_chars=[k for k in PseudoByteMapping.PSEUDO_TO_BYTE if k != " "],  # Exclude that space if you want to stay alive https://github.com/google/sentencepiece/issues/1059
-            byte_fallback=False, character_coverage=1.0  # We will be using HF coding, remember.
-        ),
-        algorithm_arguments=KudoPieceArguments_Algorithm(
-            maximum_token_length=MAX_LENGTH,
-            skip_sentences_over_length=2**13
+    vocabulariser = KudoPieceVocabulariser(
+        preprocessor=SentencePiecePreprocessor_SpaceConcatenable(MARKER.location),
+        final_vocab_size=VOCAB_SIZE,
+        arguments=KudoPieceArguments(
+            skip_sentences_over_length=TRUNCATE_INPUT_AFTER,
+            maximum_token_length=MAX_LENGTH
         )
     )
     _, train_corpus, _ = loadCorpus(CORPUS_ID)

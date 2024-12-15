@@ -4,7 +4,8 @@ from tst.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from wiat.visualisation.tokenisers import *
 
-from tktkt.models.random.pathmarkov import RandomVocabSegmentation_GreedyMarkov, PowerNormalisation
+from tktkt.models.random.pathmarkov import GRaMPa, PowerNormalisation
+from tktkt.factories.tokenisers import Factory_GRaMPa
 from tktkt.util.iterables import keepFirst, take
 from tktkt.util.types import NamedIterable
 
@@ -14,7 +15,7 @@ from fiject import LineGraph, MultiHistogram, BinSpec, StreamingVariableGranular
 
 
 def main_BPE_corpus(word_corpus: NamedIterable[str]):
-    tk = Build_English_BPE().buildTokeniser()
+    tk = Factory_BPE().buildTokeniser()
     visualiseCharsVersusTokensRelationships(
         tokeniser=tk,
         raw_words=word_corpus,
@@ -23,8 +24,7 @@ def main_BPE_corpus(word_corpus: NamedIterable[str]):
 
 
 def main_GRaMPa_word(word: str, unconstrained: bool=True):
-    tk = createTokeniser_SwitchyGrampa_BPE(l=2).subtokenisers[1]
-    assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
+    tk = Factory_GRaMPa(minimal_length=2, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
     renorm = tk.renormalisation
     assert isinstance(renorm, PowerNormalisation)
 
@@ -44,8 +44,7 @@ def main_GRaMPa_word(word: str, unconstrained: bool=True):
 
 
 def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
-    tk = createTokeniser_SwitchyGrampa_BPE(l=2).subtokenisers[1]
-    assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
+    tk = Factory_GRaMPa(minimal_length=2, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
     renorm = tk.renormalisation
     assert isinstance(renorm, PowerNormalisation)
 
@@ -94,7 +93,7 @@ def main_GRaMPa_corpus(corpus: NamedIterable[str], unconstrained: bool=True):
     )
 
 
-def plot_histogramShiftsWithTemperature(tk: RandomVocabSegmentation_GreedyMarkov, word: str, corpus: NamedIterable[str]):
+def plot_histogramShiftsWithTemperature(tk: GRaMPa, word: str, corpus: NamedIterable[str]):
     n_chars = len("".join(tk.prepareAndTokenise(word)))
 
     histo_across_amounts = StreamingMultiHistogram(f"amounts_{word}_{tk.getName()}", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars),
