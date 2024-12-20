@@ -15,7 +15,7 @@ from tst.constants import *
 
 
 def getConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:
-    config = DebertaConfig.from_pretrained("microsoft/deberta-base")
+    config = DebertaConfig.from_pretrained("microsoft/deberta-base")  # IMPORTANT NOTE: initialising with DebertaConfig() actually **DISABLES** relative attention. The docs lie. Initialising from deberta-base enables it.
     H = DEBERTA_HIDDEN_SIZE
     config.hidden_size = H
     config.intermediate_size   = H*4    # https://arxiv.org/pdf/1908.08962

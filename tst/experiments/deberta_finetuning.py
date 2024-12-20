@@ -13,10 +13,10 @@ from archit.instantiation.abstracts import HeadConfig
 from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, TaskHyperparameters
 from lamoto.tasks._core import Task, RankingMetricSpec
 from lamoto.tasks import *
-from lamoto.training.core import showWarningsAndProgress, LamotoPaths
+from lamoto.training.training import showWarningsAndProgress, LamotoPaths
 from lamoto.training.tuning import TaskTuner, MetaHyperparameters
-from wiat.training.archit_base import DebertaBaseModel
-from wiat.training.augmentation_typos import TaskWithTypos
+from archit.instantiation.basemodels import DebertaBaseModel
+from lamoto.augmenting.augment_dataset import TaskWithTypos
 
 
 def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBase,                         # What to test

@@ -5,7 +5,7 @@ from tst.experiments.tokenisers_instances import *
 from transformers import PreTrainedTokenizerBase
 from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, DebertaConfig
 
-from wiat.training.archit_base import DebertaBaseModel
+from archit.instantiation.basemodels import DebertaBaseModel
 from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
 from lamoto.training.auxiliary.hyperparameters import Intervals, EveryNMinutes, EveryNDescents, AfterNDescents

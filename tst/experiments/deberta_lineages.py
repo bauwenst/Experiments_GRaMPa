@@ -49,21 +49,21 @@ MODELS.add(Lineage(handle="8", name="deberta-" + n8, root=root8))
 hp = getPretrainingHyperparameters()
 
 mlm1 = root1.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44/checkpoint-512"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44/checkpoint-512"))
 mlm2 = root2.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-ULM_low_MLM_2024-10-15_02-40-37/checkpoint-512"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-ULM_low_MLM_2024-10-15_02-40-37/checkpoint-512"))
 mlm3 = root3.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-55/checkpoint-704"))  # !!!
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-55/checkpoint-704"))  # !!!
 mlm4 = root4.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-BPE+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-505"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-505"))
 mlm5 = root5.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-BPE+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-506"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-506"))
 mlm6 = root6.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-ULM+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
 mlm7 = root7.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-ULM+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
 mlm8 = root8.followUp(TrainingNode("mlm", hp=hp, trainer=TaskTrainer(), task=MLM_SlimPajama(packing=True, use_pppl=False),
-                                   out="deberta-ULM+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
+                                   out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512"))
 pretraining_nodes = [mlm1, mlm2, mlm3, mlm4, mlm5, mlm6, mlm7, mlm8]
 
 # Define fine-tuning
