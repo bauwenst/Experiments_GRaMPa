@@ -11,5 +11,4 @@ from tktkt import setTkTkToutputRoot
 from tktkt.paths import PathManager
 
 setTkTkToutputRoot(PATH_DATA_OUT)
-WiatPaths   = PathManager("wiat")
 LamotoPaths = PathManager("lamoto")

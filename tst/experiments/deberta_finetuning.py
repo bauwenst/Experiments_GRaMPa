@@ -36,7 +36,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     if IS_NOT_LINUX:
         hp.EXAMPLES_PER_DEVICEBATCH = 16
     else:
-        hp.WANDB_PROJECT = "wiat"
+        hp.WANDB_PROJECT = WANDB_PROJECT
         hp.store_in_hf_cache = True  # If you're fine-tuning 12 models at the same time, you want model checkpoints to land on the large storage partition.
         hp.EXAMPLES_PER_DEVICEBATCH = 128 if not task.task_name.lower().startswith("dp") else 64  # Even when packing 1024 tokens per example, 128 fits on an A100 with 94% VRAM usage though. The problem with DP is that it has fragmentation issues in very high epochs (~12) at batch size 128.
 

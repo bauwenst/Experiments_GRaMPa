@@ -36,7 +36,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
     hp.SEED = 69420
     hp.SAVE_AS = "deberta" + "-" + tk_name + "_low"*low_resource
 
-    # These are only to parse the config. We are going to use a HF class since LaMoTO has no weight tying yet.
+    # These are only to parse the config. We are going to use an HF class since LaMoTO has no weight tying yet.
     hp.archit_basemodel_class = DebertaBaseModel
     hp.archit_head_config = MaskedLMHeadConfig()
 
@@ -52,7 +52,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
     if IS_NOT_LINUX:
         hp.EXAMPLES_PER_DEVICEBATCH = 2
     else:
-        hp.WANDB_PROJECT = "wiat"
+        hp.WANDB_PROJECT = WANDB_PROJECT
         hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
         hp.EXAMPLES_PER_EFFECTIVE_BATCH = 2048  # As in DeBERTa paper and also the best in the RoBERTa paper.
 

@@ -19,3 +19,4 @@ class _ExperimentsConfig:
 
 
 EXPERIMENT_CONFIG = _ExperimentsConfig(n_tuning_samples=5, n_32batches_phase1=512)
+WANDB_PROJECT = "GRaMPa"

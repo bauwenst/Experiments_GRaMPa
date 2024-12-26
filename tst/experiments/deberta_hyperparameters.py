@@ -34,6 +34,7 @@ def getConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:
 def getPretrainingHyperparameters() -> MlmHyperparameters:
     hp = SUGGESTED_HYPERPARAMETERS_MLM.copy()
     hp.SEED = 69420
+    hp.store_in_hf_cache = True
 
     # Set lineage fields to None.
     hp.MODEL_CONFIG_OR_CHECKPOINT = None
@@ -49,7 +50,7 @@ def getPretrainingHyperparameters() -> MlmHyperparameters:
     if IS_NOT_LINUX:
         hp.EXAMPLES_PER_DEVICEBATCH = 2
     else:
-        hp.WANDB_PROJECT = "wiat"
+        hp.WANDB_PROJECT = WANDB_PROJECT
         hp.EXAMPLES_PER_DEVICEBATCH = 128  # Even when packing 1024 tokens per example, this fits on an A100. 94% VRAM usage though. Tight.
         hp.EXAMPLES_PER_EFFECTIVE_BATCH = 2048  # As in DeBERTa paper and also the best in the RoBERTa paper.
 
@@ -66,7 +67,8 @@ def getPretrainingHyperparameters() -> MlmHyperparameters:
     hp.EVAL_VS_SAVE_INTERVALS = Intervals(
         # evaluation=EveryNMinutes(minutes=9*20),  # Train for 9 x 20 minutes (3 hours, equalling 72 train batches), then evaluate for 1 x 20 minutes. Hence, exactly 10% of compute is spent verifying that we don't overfit. Every save cycle is 200 minutes = 3h20m. For the slow tokeniser, it's 30m for an eval and 9 x 20 == 6 x 30 so 1/7 = 14% of compute in eval, with 3 hours being 48 batches.
         evaluation=EveryNDescents(descents=64),  # Makes more sense than minutes for two reasons: (1) you can compare measurements between models independent of tokeniser speed, and (2) unlike time intervals, the fraction of time spent in compute vs. spent in eval is a constant.
-        checkpointing=None
+        checkpointing=None,
+        backups=EveryNDescents(descents=256)
     )
     return hp
 
@@ -85,7 +87,7 @@ def getFinetuningHyperparameters(task: Task) -> Tuple[TaskHyperparameters,MetaHy
     if IS_NOT_LINUX:
         hp.EXAMPLES_PER_DEVICEBATCH = 16
     else:
-        hp.WANDB_PROJECT = "wiat"
+        hp.WANDB_PROJECT = WANDB_PROJECT
         hp.store_in_hf_cache = True  # If you're fine-tuning 12 models at the same time, you want model checkpoints to land on the large storage partition.
         hp.EXAMPLES_PER_DEVICEBATCH = 128 if not task.task_name.lower().startswith("dp") else 64  # Even when packing 1024 tokens per example, 128 fits on an A100 with 94% VRAM usage though. The problem with DP is that it has fragmentation issues in very high epochs (~12) at batch size 128.
 
