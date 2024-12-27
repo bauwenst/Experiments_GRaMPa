@@ -15,4 +15,4 @@
 cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/deberta_pretraining.py --low_resource --model_id $1
+PYTHONPATH=. python scripts/experiments/deberta_pretraining.py --low_resource --model_id $1

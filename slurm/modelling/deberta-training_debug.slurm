@@ -9,7 +9,7 @@
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --time=00:10:00
 
-cd $VSC_DATA/Python/ExternalRepos/WiaT/
+cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/deberta_pretraining.py --low_resource --model_id 6
+PYTHONPATH=. python scripts/experiments/deberta_pretraining.py --low_resource --model_id 6

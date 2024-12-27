@@ -9,6 +9,6 @@
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --time=24:00:00
 
-cd $VSC_DATA/Python/ExternalRepos/WiaT/
+cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft
-PYTHONPATH=. python tst/experiments/train_tokenisers.py
+PYTHONPATH=. python scripts/experiments/train_tokenisers.py

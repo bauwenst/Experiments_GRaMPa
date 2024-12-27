@@ -9,10 +9,10 @@
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --time=01:00:00
 
-cd $VSC_DATA/Python/ExternalRepos/WiaT/
+cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/deberta_finetuning.py \
+PYTHONPATH=. python scripts/experiments/deberta_finetuning.py \
     --n_samples 5 \
     --max_batches_at_bs32 512 \
     --checkpoint $VSC_DATA/Python/ExternalRepos/WiaT/data/out/lamoto/checkpoints/$1 \

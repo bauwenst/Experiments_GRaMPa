@@ -12,4 +12,4 @@
 cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft
 nvidia-smi
-PYTHONPATH=. python tst/experiments/run.py --lineage $1 --node $2 --n_samples ${3-0} --n_32batches_phase1 ${4-0}
+PYTHONPATH=. python scripts/experiments/run.py --lineage $1 --node $2 --n_samples ${3-0} --n_32batches_phase1 ${4-0}
