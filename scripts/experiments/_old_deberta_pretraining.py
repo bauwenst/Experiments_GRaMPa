@@ -1,6 +1,6 @@
-from tst.preamble import *
-from tst.constants import *
-from tst.experiments.tokenisers_instances import *
+from scripts.preamble import *
+from scripts.constants import *
+from scripts.experiments.tokenisers_instances import *
 
 from transformers import PreTrainedTokenizerBase
 from transformers.models.deberta.modeling_deberta import DebertaForMaskedLM, DebertaConfig

@@ -1,6 +1,6 @@
-from tst.preamble import *
-from tst.constants import *
-from tst.experiments.tokenisers_instances import getTokeniserByModelId
+from scripts.preamble import *
+from scripts.constants import *
+from scripts.experiments.tokenisers_instances import getTokeniserByModelId
 
 from typing import Set, Tuple
 from transformers import PreTrainedTokenizerBase

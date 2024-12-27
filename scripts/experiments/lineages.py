@@ -1,5 +1,5 @@
-from tst.preamble import *
-from tst.experiments.deberta_hyperparameters import *
+from scripts.preamble import *
+from scripts.experiments.deberta_hyperparameters import *
 
 from lamoto.training.lineages import *
 from lamoto.tasks import MLM_SlimPajama, DP, NER

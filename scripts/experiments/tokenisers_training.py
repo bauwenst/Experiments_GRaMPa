@@ -1,4 +1,4 @@
-from tst.preamble import *
+from scripts.preamble import *
 
 from typing import Tuple
 from datasets import load_dataset, IterableDataset, IterableDatasetDict

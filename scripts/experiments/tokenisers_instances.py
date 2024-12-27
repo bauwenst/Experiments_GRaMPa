@@ -1,6 +1,6 @@
-from tst.preamble import *
+from scripts.preamble import *
 # from tst.constants import *  # ---> The constants are not used in this file because EVEN when the constants change, the tokenisers don't.
-from tst.experiments.tokenisers_training import MARKER
+from scripts.experiments.tokenisers_training import MARKER
 
 from typing import Tuple
 

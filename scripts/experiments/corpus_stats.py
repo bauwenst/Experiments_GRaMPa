@@ -1,11 +1,12 @@
-from tst.preamble import *
+from scripts.preamble import *
 from wiat.visualisation.sentences import *
 
 from tktkt.util.iterables import take, streamProgress
+from tktkt.util.types import NamedIterable
 from tktkt.preparation.instances import TraditionalPretokeniser, IdentityMapper, Preprocessor
 
-from tst.experiments.tokenisers_training import loadCorpus
-from tst.experiments.tokenisers_instances import createTokeniser_SwitchyGrampa_BPE, Build_English_Kudo, Build_English_BPE
+from scripts.experiments.tokenisers_training import loadCorpus
+from scripts.experiments.tokenisers_instances import Factory_SwitchyGrampa_BPE, Factory_KudoPiece, Factory_BPE, TokeniserWithFiniteTypeDomain
 
 CORPUS_ID   = ("allenai/c4", "en")
 # CORPUS_SIZE = 2_000_000
@@ -13,7 +14,7 @@ CORPUS_ID   = ("allenai/c4", "en")
 CORPUS_SIZE = 2_000
 
 
-def main(tk: Tokeniser):
+def main(tk: TokeniserWithFiniteTypeDomain):
     # Load word isolator
     prep = Preprocessor(IdentityMapper(), IdentityMapper(), TraditionalPretokeniser())
 
@@ -28,7 +29,7 @@ def main(tk: Tokeniser):
 
 
 if __name__ == "__main__":
-    from tst.constants import *
+    from scripts.constants import *
     # switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, t=1.0, l=1)
     # main(switch.subtokenisers[0])
     # main(switch.subtokenisers[1])

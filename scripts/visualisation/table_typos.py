@@ -1,4 +1,4 @@
-from tst.preamble import *
+from scripts.preamble import *
 
 from enum import Enum
 from typing import Tuple, Union, TypeVar, Dict, Set

@@ -2,7 +2,7 @@ if __name__ == "__main__":
     from tktkt.util.environment import IS_NOT_LINUX
 
     if IS_NOT_LINUX:
-        from tst.experiments.lineages import MODELS
+        from scripts.experiments.lineages import MODELS
 
         def generateCommands(task_id: int):
             for lineage in MODELS:
@@ -22,9 +22,9 @@ if __name__ == "__main__":
         parser.add_argument("--n_32batches_phase1", type=int)
         args = parser.parse_args()
 
-        from tst.constants import EXPERIMENT_CONFIG
+        from scripts.constants import EXPERIMENT_CONFIG
         EXPERIMENT_CONFIG.n_tuning_samples   = args.n_samples
         EXPERIMENT_CONFIG.n_32batches_phase1 = args.n_32batches_phase1
 
-        from tst.experiments.deberta_lineages import MODELS
+        from scripts.experiments.lineages import MODELS
         MODELS.get(args.lineage).run(args.node)

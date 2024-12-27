@@ -1,6 +1,6 @@
-from tst.preamble import *
-from tst.experiments.tokenisers_instances import *
-from tst.experiments.tokenisers_training import loadCorpus, CORPUS_ID
+from scripts.preamble import *
+from scripts.experiments.tokenisers_instances import *
+from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from wiat.visualisation.tokenisers import *
 
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     #   - GRaMPa-1.0-ULM
     #   - GRaMPa-5.0-ULM
     #   - GRaMPa-10.0-ULM
-    from tst.experiments.tokenisers_instances import getTokeniserByModelId
+    from scripts.experiments.tokenisers_instances import getTokeniserByModelId
     tokenisers = [getTokeniserByModelId(model_id=i) for i in range(1,8+1)]
     plot_fertilities(tokenisers, raw_words=word_corpus)
 

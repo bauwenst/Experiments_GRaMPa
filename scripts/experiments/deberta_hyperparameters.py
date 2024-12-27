@@ -1,3 +1,6 @@
+from scripts.preamble import *
+from scripts.constants import *
+
 from typing import Tuple, Type, Set
 
 from transformers import DebertaConfig, DebertaForMaskedLM
@@ -10,8 +13,6 @@ from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters,
     EveryNDescents, AfterNDescents, TaskHyperparameters
 from lamoto.training.lineages import SerialisedTokeniser
 from tktkt.util.environment import IS_NOT_LINUX
-
-from tst.constants import *
 
 
 def getDebertaConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:

@@ -1,6 +1,6 @@
-from tst.preamble import *
-from tst.experiments.tokenisers_instances import *
-from tst.experiments.tokenisers_training import loadCorpus, CORPUS_ID
+from scripts.preamble import *
+from scripts.experiments.tokenisers_instances import *
+from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from typing import Iterable, Tuple
 import numpy as np
@@ -185,9 +185,9 @@ def main_temperature(bpe_not_ulm: bool):
     """
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, l=2)
+        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, l_min=2).buildTokeniser()
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l=2)
+        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l_min=2).buildTokeniser()
     grampa = switch.subtokenisers[1]
     assert isinstance(grampa, RandomVocabSegmentation_GreedyMarkov)
 
@@ -211,9 +211,9 @@ def main_temperature(bpe_not_ulm: bool):
 def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
     # Get tokeniser
     if bpe_not_ulm:
-        switch = createTokeniser_SwitchyGrampa_BPE(dropout=0.0, t=temperature, l=2)
+        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, temperature=temperature, l_min=2).buildTokeniser()
     else:
-        switch = createTokeniser_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, t=temperature, l=2)
+        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, temperature=temperature, l_min=2).buildTokeniser()
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
@@ -298,7 +298,7 @@ def main_compareULM():
 
 
 def main_compareChosenBPEandULM():
-    from tst.constants import BPEDROPOUT_P, ULM_K, ULM_ALPHA
+    from scripts.constants import BPEDROPOUT_P, ULM_K, ULM_ALPHA
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID, validation_size=1000)
