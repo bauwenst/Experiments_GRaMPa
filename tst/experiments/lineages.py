@@ -1,11 +1,12 @@
-from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
-
 from tst.preamble import *
 from tst.experiments.deberta_hyperparameters import *
 
 from lamoto.training.lineages import *
 from lamoto.tasks import MLM_SlimPajama, DP, NER
+from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
+
 from archit.instantiation.basemodels import DebertaBaseModel
+
 from tktkt.util.timing import Timer
 from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
@@ -14,7 +15,7 @@ t = Timer()
 print(f"=== Initialising lineages ===")
 t.start(echo=True)
 
-# Define the 2 vocabularies  TODO: TkTkT has had an update that factories now put specials in the back of the vocab. Check if this breaks things!
+# Define the 2 vocabularies
 bpe_vocab  = BPE32ki_SlimPajama3M()
 kudo_vocab = KudoPiece32ki_SlimPajama3M()
 
@@ -37,20 +38,20 @@ b13,n13 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=+5.0, l
 b14,n14 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=-10.0, l_min=1), f"ULM+GRaMPa(t=-10.0,l=1)"
 
 # Define the 14 lineages
-root1 = LineageRootNode(getConfig(b1), base_model=DebertaBaseModel, tokeniser=b1)
-root2 = LineageRootNode(getConfig(b2), base_model=DebertaBaseModel, tokeniser=b2)
-root3 = LineageRootNode(getConfig(b3), base_model=DebertaBaseModel, tokeniser=b3)
-root4 = LineageRootNode(getConfig(b4), base_model=DebertaBaseModel, tokeniser=b4)
-root5 = LineageRootNode(getConfig(b5), base_model=DebertaBaseModel, tokeniser=b5)
-root6 = LineageRootNode(getConfig(b6), base_model=DebertaBaseModel, tokeniser=b6)
-root7 = LineageRootNode(getConfig(b7), base_model=DebertaBaseModel, tokeniser=b7)
-root8 = LineageRootNode(getConfig(b8), base_model=DebertaBaseModel, tokeniser=b8)
-root9 = LineageRootNode(getConfig(b9), base_model=DebertaBaseModel, tokeniser=b9)
-root10 = LineageRootNode(getConfig(b10), base_model=DebertaBaseModel, tokeniser=b10)
-root11 = LineageRootNode(getConfig(b11), base_model=DebertaBaseModel, tokeniser=b11)
-root12 = LineageRootNode(getConfig(b12), base_model=DebertaBaseModel, tokeniser=b12)
-root13 = LineageRootNode(getConfig(b13), base_model=DebertaBaseModel, tokeniser=b13)
-root14 = LineageRootNode(getConfig(b14), base_model=DebertaBaseModel, tokeniser=b14)
+root1 = LineageRootNode(getDebertaConfig(b1), base_model=DebertaBaseModel, tokeniser=b1)
+root2 = LineageRootNode(getDebertaConfig(b2), base_model=DebertaBaseModel, tokeniser=b2)
+root3 = LineageRootNode(getDebertaConfig(b3), base_model=DebertaBaseModel, tokeniser=b3)
+root4 = LineageRootNode(getDebertaConfig(b4), base_model=DebertaBaseModel, tokeniser=b4)
+root5 = LineageRootNode(getDebertaConfig(b5), base_model=DebertaBaseModel, tokeniser=b5)
+root6 = LineageRootNode(getDebertaConfig(b6), base_model=DebertaBaseModel, tokeniser=b6)
+root7 = LineageRootNode(getDebertaConfig(b7), base_model=DebertaBaseModel, tokeniser=b7)
+root8 = LineageRootNode(getDebertaConfig(b8), base_model=DebertaBaseModel, tokeniser=b8)
+root9 = LineageRootNode(getDebertaConfig(b9), base_model=DebertaBaseModel, tokeniser=b9)
+root10 = LineageRootNode(getDebertaConfig(b10), base_model=DebertaBaseModel, tokeniser=b10)
+root11 = LineageRootNode(getDebertaConfig(b11), base_model=DebertaBaseModel, tokeniser=b11)
+root12 = LineageRootNode(getDebertaConfig(b12), base_model=DebertaBaseModel, tokeniser=b12)
+root13 = LineageRootNode(getDebertaConfig(b13), base_model=DebertaBaseModel, tokeniser=b13)
+root14 = LineageRootNode(getDebertaConfig(b14), base_model=DebertaBaseModel, tokeniser=b14)
 
 MODELS = LineageRegistry()
 MODELS.add(Lineage(handle="1", name="deberta-" + n1, root=root1))

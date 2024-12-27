@@ -14,7 +14,7 @@ from tktkt.util.environment import IS_NOT_LINUX
 from tst.constants import *
 
 
-def getConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:
+def getDebertaConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:
     config = DebertaConfig.from_pretrained("microsoft/deberta-base")  # IMPORTANT NOTE: initialising with DebertaConfig() actually **DISABLES** relative attention. The docs lie. Initialising from deberta-base enables it.
     H = DEBERTA_HIDDEN_SIZE
     config.hidden_size = H
@@ -71,6 +71,9 @@ def getPretrainingHyperparameters() -> MlmHyperparameters:
         backups=EveryNDescents(descents=256)
     )
     return hp
+
+
+########################################################################################################################
 
 
 def getFinetuningHyperparameters(task: Task) -> Tuple[TaskHyperparameters,MetaHyperparameters]:
