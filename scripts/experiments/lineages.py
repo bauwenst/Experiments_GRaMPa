@@ -8,34 +8,42 @@ from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
 from archit.instantiation.basemodels import DebertaBaseModel
 
 from tktkt.util.timing import Timer
-from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
+from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
+from scripts.experiments.tokenisers_instances import KudoPiece32ki_SlimPajama3M_Old, KudoPiece32ki_SlimPajama3M_New
 
 t = Timer()
 print(f"=== Initialising lineages ===")
 t.start(echo=True)
 
-# Define the 2 vocabularies
+# Define the 2 vocabularies. I did fumble the specials a little. A summary:
+#   - The original models (identifiers 1 to 8):
+#       - BPE's specials: <s>: 0, </s>: 1, <unk>: 2, <pad>: 3, <mask>: 4
+#       - ULM's specials: <pad>: 0, <mask>: 1, <unk>: 2, <s>: 3, </s>: 4
+#   - The new models (identifiers 9 to 14):
+#       - BPE's specials: <s>: 0, </s>: 1, <unk>: 2, <pad>: 3, <mask>: 4
+#       - ULM's specials: <s>: 32765, </s>: 32766, <unk>: 32767, <pad>: 32768, <mask>: 32769
 bpe_vocab  = BPE32ki_SlimPajama3M()
-kudo_vocab = KudoPiece32ki_SlimPajama3M()
+kudo_vocab_old = KudoPiece32ki_SlimPajama3M_Old()
+kudo_vocab_new = KudoPiece32ki_SlimPajama3M_New()
 
 # Define the 14 tokenisers
-b1,n1 = Factory_BPE(files=bpe_vocab, dropout=0.1),                 "BPE-dropout-0.1"
-b2,n2 = Factory_KudoPiece(files=kudo_vocab, kbest=64, alpha=0.15), "ULM-64-0.15"
+b1,n1 = Factory_BPE(files=bpe_vocab, dropout=0.1),                     "BPE-dropout-0.1"
+b2,n2 = Factory_KudoPiece(files=kudo_vocab_old, kbest=64, alpha=0.15), "ULM-64-0.15"
 
 b3,n3 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+1.0, l_min=2),   f"BPE+GRaMPa(t=+1.0,l=2)"
 b4,n4 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+5.0, l_min=2),   f"BPE+GRaMPa(t=+5.0,l=2)"
 b5,n5 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=-10.0, l_min=2),  f"BPE+GRaMPa(t=-10.0,l=2)"
-b6,n6 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=+1.0, l_min=2),  f"ULM+GRaMPa(t=+1.0,l=2)"
-b7,n7 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=+5.0, l_min=2),  f"ULM+GRaMPa(t=+5.0,l=2)"
-b8,n8 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=-10.0, l_min=2), f"ULM+GRaMPa(t=-10.0,l=2)"
+b6,n6 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=+1.0, l_min=2),  f"ULM+GRaMPa(t=+1.0,l=2)"
+b7,n7 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=+5.0, l_min=2),  f"ULM+GRaMPa(t=+5.0,l=2)"
+b8,n8 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=-10.0, l_min=2), f"ULM+GRaMPa(t=-10.0,l=2)"
 
-b9,n9   = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+1.0, l_min=1),   f"BPE+GRaMPa(t=+1.0,l=1)"
-b10,n10 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+5.0, l_min=1),   f"BPE+GRaMPa(t=+5.0,l=1)"
-b11,n11 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=-10.0, l_min=1),  f"BPE+GRaMPa(t=-10.0,l=1)"
-b12,n12 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=+1.0, l_min=1),  f"ULM+GRaMPa(t=+1.0,l=1)"
-b13,n13 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=+5.0, l_min=1),  f"ULM+GRaMPa(t=+5.0,l=1)"
-b14,n14 = Factory_SwitchyGrampa_ULM(files=kudo_vocab, p=0.5, temperature=-10.0, l_min=1), f"ULM+GRaMPa(t=-10.0,l=1)"
+b9,n9   = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+1.0, l_min=1),  f"BPE+GRaMPa(t=+1.0,l=1)"
+b10,n10 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+5.0, l_min=1),  f"BPE+GRaMPa(t=+5.0,l=1)"
+b11,n11 = Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=-10.0, l_min=1), f"BPE+GRaMPa(t=-10.0,l=1)"
+b12,n12 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=+1.0, l_min=1),  f"ULM+GRaMPa(t=+1.0,l=1)"
+b13,n13 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=+5.0, l_min=1),  f"ULM+GRaMPa(t=+5.0,l=1)"
+b14,n14 = Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=-10.0, l_min=1), f"ULM+GRaMPa(t=-10.0,l=1)"
 
 # Define the 14 lineages
 root1 = LineageRootNode(getDebertaConfig(b1), base_model=DebertaBaseModel, tokeniser=b1)
@@ -91,12 +99,12 @@ mlm5 = addPretraining(root5,   low_resource=True, out=LamotoPaths.pathToCheckpoi
 mlm6 = addPretraining(root6,   low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
 mlm7 = addPretraining(root7,   low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
 mlm8 = addPretraining(root8,   low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
-mlm9 = addPretraining(root9,   low_resource=True, out=None)
-mlm10 = addPretraining(root10, low_resource=True, out=None)
-mlm11 = addPretraining(root11, low_resource=True, out=None)
-mlm12 = addPretraining(root12, low_resource=True, out=None)
-mlm13 = addPretraining(root13, low_resource=True, out=None)
-mlm14 = addPretraining(root14, low_resource=True, out=None)
+mlm9 = addPretraining(root9,   low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
+mlm10 = addPretraining(root10, low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
+mlm11 = addPretraining(root11, low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
+mlm12 = addPretraining(root12, low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
+mlm13 = addPretraining(root13, low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
+mlm14 = addPretraining(root14, low_resource=True, out=LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
 pretraining_nodes = [mlm1, mlm2, mlm3, mlm4, mlm5, mlm6, mlm7, mlm8, mlm9, mlm10, mlm11, mlm12, mlm13, mlm14]
 
 # Define fine-tuning

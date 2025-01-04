@@ -7,22 +7,21 @@ from typing import Tuple
 from tktkt.interfaces import Preprocessor, Vocab
 from tktkt.interfaces.tokeniser import TokeniserWithFiniteTypeDomain
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
-from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
-from tktkt.models.bpe.vocabularisation import BPEVocabulariser
+from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
 from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser
-from tktkt.paths import TkTkTPaths
 
 
-class BPE32ki_SlimPajama3M_Local(BPE32ki_SlimPajama3M):
+class KudoPiece32ki_SlimPajama3M_Old(KudoPiece32ki_SlimPajama3M):
     def _buildVocabulary(self) -> Vocab:
-        folder = TkTkTPaths.pathToModels() / "bpe" / "bpe_slim_pajama-627_b_2024-10-06_02-40-55"
-        return BPEVocabulariser.load(folder, self._specials)
+        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
+                                           existing_types={"<pad>": 0, "<mask>": 1, "<unk>": 2, "<s>": 3, "</s>": 4})
 
 
-class KudoPiece32ki_SlimPajama3M_Local(KudoPiece32ki_SlimPajama3M):
+class KudoPiece32ki_SlimPajama3M_New(KudoPiece32ki_SlimPajama3M):
     def _buildVocabulary(self) -> Vocab:
-        folder = TkTkTPaths.pathToModels() / "kudopiece" / "kudopiece_slim_pajama-627_b_2024-10-06_11-26-39"
-        return KudoPieceVocabulariser.load(folder, self._specials)
+        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
+                                           existing_types=self._specials,
+                                           extras_first=False)
 
 
 def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain, str]:
