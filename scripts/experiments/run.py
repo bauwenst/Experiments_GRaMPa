@@ -2,15 +2,18 @@ if __name__ == "__main__":
     from tktkt.util.environment import IS_NOT_LINUX
 
     if IS_NOT_LINUX:
-        from scripts.experiments.lineages import MODELS
+        from scripts.experiments.lineages import LINEAGES
 
         def generateCommands(task_id: int):
-            for lineage in MODELS:
+            for lineage in LINEAGES:
                 for i,node in enumerate(lineage):
                     if i == task_id:
-                        print(f"sbatch run_h100.slurm {lineage.handle} {node.handle}")
+                        if "mlm" in node.handle.lower():
+                            print(f"sbatch run_a100.slurm {lineage.handle} {node.handle}")
+                        else:
+                            print(f"sbatch run_a100.slurm {lineage.handle} {node.handle} 5 512")
 
-        generateCommands(task_id=0)
+        generateCommands(task_id=2)
     else:
         import argparse
 
@@ -26,5 +29,5 @@ if __name__ == "__main__":
         EXPERIMENT_CONFIG.n_tuning_samples   = args.n_samples
         EXPERIMENT_CONFIG.n_32batches_phase1 = args.n_32batches_phase1
 
-        from scripts.experiments.lineages import MODELS
-        MODELS.get(args.lineage).run(args.node)
+        from scripts.experiments.lineages import LINEAGES
+        LINEAGES.get(args.lineage).run(args.node)

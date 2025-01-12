@@ -11,25 +11,26 @@ from lamoto.tasks._core import Task, RankingMetricSpec
 from lamoto.training.tuning import MetaHyperparameters
 from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, Intervals, EveryNMinutes, \
     EveryNDescents, AfterNDescents, TaskHyperparameters
-from lamoto.training.lineages import SerialisedTokeniser
+from lamoto.training.lineages import SerialisedTokeniser, ConfigFactory, BaseModel
 from tktkt.util.environment import IS_NOT_LINUX
 
 
-def getDebertaConfig(tokeniser: SerialisedTokeniser) -> DebertaConfig:
-    config = DebertaConfig.from_pretrained("microsoft/deberta-base")  # IMPORTANT NOTE: initialising with DebertaConfig() actually **DISABLES** relative attention. The docs lie. Initialising from deberta-base enables it.
-    H = DEBERTA_HIDDEN_SIZE
-    config.hidden_size = H
-    config.intermediate_size   = H*4    # https://arxiv.org/pdf/1908.08962
-    config.num_attention_heads = H//64  # https://arxiv.org/pdf/1908.08962
+class DebertaConfigFactory(ConfigFactory):
+    def buildConfig(self, serial_tokeniser: SerialisedTokeniser, base_model: Type[BaseModel]) -> DebertaConfig:
+        config = DebertaConfig.from_pretrained("microsoft/deberta-base")  # IMPORTANT NOTE: initialising with DebertaConfig() actually **DISABLES** relative attention. The docs lie. Initialising from deberta-base enables it.
+        H = DEBERTA_HIDDEN_SIZE
+        config.hidden_size = H
+        config.intermediate_size   = H*4    # https://arxiv.org/pdf/1908.08962
+        config.num_attention_heads = H//64  # https://arxiv.org/pdf/1908.08962
 
-    print("\nInstantiating tokeniser to get vocab size...")
-    config.vocab_size = len(AutoTokenizer.from_pretrained(tokeniser).get_vocab()) if isinstance(tokeniser, str) else tokeniser.buildTokeniser().getVocabSize()
-    config.num_hidden_layers = DEBERTA_LAYERS
-    config.max_relative_positions = DEBERTA_K
-    config.tie_word_embeddings = True
+        print("\nInstantiating tokeniser to get vocab size...")
+        config.vocab_size = len(AutoTokenizer.from_pretrained(serial_tokeniser).get_vocab()) if isinstance(serial_tokeniser, (str,Path)) else serial_tokeniser.buildTokeniser().getVocabSize()
+        config.num_hidden_layers = DEBERTA_LAYERS
+        config.max_relative_positions = DEBERTA_K
+        config.tie_word_embeddings = True
 
-    config.max_position_embeddings = DEBERTA_CONTEXT_LIMIT  # (Note: the 1024 you see in the relative positional embeddings matrix is 2*k, not this number, see docs of DebertaConfig.) The whole point of the paper is "help this tokeniser has a lot of tokens", so if we're going to truncate it better be decently far out. Can't be too far nevertheless, because pushing a full context through should still be feasible (in fact, that's what happens in packing). The use of relative embeddings means that we don't need to worry about the exact number and could arguably alter it at test time.
-    return config
+        config.max_position_embeddings = DEBERTA_CONTEXT_LIMIT  # (Note: the 1024 you see in the relative positional embeddings matrix is 2*k, not this number, see docs of DebertaConfig.) The whole point of the paper is "help this tokeniser has a lot of tokens", so if we're going to truncate it better be decently far out. Can't be too far nevertheless, because pushing a full context through should still be feasible (in fact, that's what happens in packing). The use of relative embeddings means that we don't need to worry about the exact number and could arguably alter it at test time.
+        return config
 
 
 def getPretrainingHyperparameters() -> MlmHyperparameters:
