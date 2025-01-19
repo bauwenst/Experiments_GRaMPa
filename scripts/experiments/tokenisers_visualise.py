@@ -1,3 +1,5 @@
+from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships
+
 from scripts.preamble import *
 from scripts.experiments.tokenisers_instances import *
 from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID

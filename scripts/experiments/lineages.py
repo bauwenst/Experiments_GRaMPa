@@ -2,10 +2,10 @@ from scripts.preamble import *
 from scripts.experiments.deberta_hyperparameters import *
 
 from lamoto.training.lineages import *
-from lamoto.tasks import MLM_SlimPajama, DP, NER
+from lamoto.tasks import *
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate, TaskWithTypos
-
 from archit.instantiation.basemodels import DebertaBaseModel
+from archit.instantiation.heads import *
 
 from tktkt.util.timing import Timer
 from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M
@@ -102,7 +102,7 @@ meta = MetaHyperparameters(
     max_examples_phase_1=32*EXPERIMENT_CONFIG.n_32batches_phase1,
     minmax_evals_phase_1=5,  # Eval 5 times and select the version with best loss. We don't really do the evals for patience in phase 1.
 
-    max_examples_phase_2=32*16384,  # Run for at most 16384 batches of size 32.
+    max_examples_phase_2=32*16384,  # Run for at most 16384 batches of size 32, a 32x increase from phase 1.
     minmax_evals_phase_2=32         # Eval every 512 batches at batch size 32 (which has 16384 batches, so 16384/32 = 512).
 )
 # - Define hyperparameters
@@ -141,20 +141,20 @@ mlm.next(TuningNode("dp-typos-3", hp=hp.withHeadConfig(dep_head), meta=meta, tun
 # Build registry and set checkpoints.
 LINEAGES = tree.buildRegistry([root1, root2, root3, root4, root5, root6, root7, root8, root9, root10, root11, root12, root13, root14])
 
-LINEAGES.get("1")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44/checkpoint-512")
-LINEAGES.get("2")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM_low_MLM_2024-10-15_02-40-37/checkpoint-512")
-LINEAGES.get("3")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-55/checkpoint-704")  # !!!
-LINEAGES.get("4")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-505")
-LINEAGES.get("5")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-506")
-LINEAGES.get("6")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
-LINEAGES.get("7")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
-LINEAGES.get("8")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
-LINEAGES.get("9")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
-LINEAGES.get("10")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
-LINEAGES.get("11")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
-LINEAGES.get("12")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
-LINEAGES.get("13")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
-LINEAGES.get("14")._get("mlm").out(LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("1").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44/checkpoint-512")
+LINEAGES.get("2").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM_low_MLM_2024-10-15_02-40-37/checkpoint-512")
+LINEAGES.get("3").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-55/checkpoint-704")  # !!!
+LINEAGES.get("4").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-505")  # !!!
+LINEAGES.get("5").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-506")  # !!!
+LINEAGES.get("6").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=1.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
+LINEAGES.get("7").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=5.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
+LINEAGES.get("8").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=2)_low_MLM_2024-10-13_10-29-06/checkpoint-512")
+LINEAGES.get("9").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("10").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("11").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-BPE+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("12").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+1.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("13").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=+5.0,l=1)_MLM+trunc50K(train)/512")
+LINEAGES.get("14").out("mlm", LamotoPaths.pathToCheckpoints() / "deberta-ULM+GRaMPa(t=-10.0,l=1)_MLM+trunc50K(train)/512")
 
 for lineage in LINEAGES:
     print(lineage)

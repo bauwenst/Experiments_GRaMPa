@@ -1,4 +1,4 @@
-# TODO
+# Notes on tokeniser hyperparameters
 - Some findings about tuning hyperparameters:
   - You can't tune temperature with Rényi efficiency, because higher temperatures bias the segmentations out of uniformity
     and has the same effect on token usage uniformity (which is what RE measures) hence dropping RE for any temperature
@@ -46,13 +46,3 @@
   - Deterministic ULM+GRaMPa: 
     - [x] Same temperatures as above.
     - [ ] ~~RE(p), again with t=1. We fucked this tuning up last time by choosing alpha=0.5, k=64. Should've been alpha=1.0, k=1.~~ As stated above, this is pointless.
-- [x] Print DeBERTa model to make sure it looks like what we want it to look like (e.g. no absolute positionals)
-  - Looks good. Only sucky part is that since we have max sequence length of 1024, there will be k=1024 relative positional embeddings.
-- Throw one onto A100 debug to find a working batch size.
-  - ERROR?!
-- Set up the low-resource versions first. If we run out of time, at least we have those.
-- Throw all 8 onto H100.
-  - Implement GLUE/SuperGLUE
-  - Process paper comments
-- Finetune
-- Evaluate with typos
