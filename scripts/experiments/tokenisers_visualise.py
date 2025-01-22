@@ -13,7 +13,7 @@ from tktkt.util.types import NamedIterable
 
 from bpe_knockout import morphologyGenerator, KnockoutDataConfiguration, setupEnglish
 
-from fiject import LineGraph, MultiHistogram, BinSpec, StreamingVariableGranularityHistogram, BinOverlapMode, FIJECT_DEFAULTS
+from fiject import LineGraph, MultiHistogram, BinSpec, StreamingVariableGranularityHistogram, BinOverlapMode, FIJECT_DEFAULTS, CacheMode
 
 
 def main_BPE_corpus(word_corpus: NamedIterable[str]):
@@ -260,15 +260,6 @@ if __name__ == "__main__":
     # main_BPE_corpus(corpus)
     # main_GRaMPa_corpus(corpus, unconstrained=True)
 
-    # TODO: Also test the two separate halves of the switchy tokenisers. That is:
-    #   - BPE-0.0
-    #   - ULM-1
-    #   - GRaMPa-1.0-BPE
-    #   - GRaMPa-5.0-BPE
-    #   - GRaMPa-10.0-BPE
-    #   - GRaMPa-1.0-ULM
-    #   - GRaMPa-5.0-ULM
-    #   - GRaMPa-10.0-ULM
     from scripts.experiments.tokenisers_instances import getTokeniserByModelId
     tokenisers = [getTokeniserByModelId(model_id=i) for i in range(1,8+1)]
     plot_fertilities(tokenisers, raw_words=word_corpus)

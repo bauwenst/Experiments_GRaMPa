@@ -1,17 +1,15 @@
 from scripts.preamble import *
 from scripts.constants import *
 
-from typing import Tuple, Type, Set
+from typing import Type
 
 from transformers import DebertaConfig, DebertaForMaskedLM
 from transformers import AutoTokenizer
 
 from lamoto.tasks import MlmHyperparameters, SUGGESTED_HYPERPARAMETERS_MLM
-from lamoto.tasks._core import Task, RankingMetricSpec
-from lamoto.training.tuning import MetaHyperparameters
-from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, Intervals, EveryNMinutes, \
-    EveryNDescents, AfterNDescents, TaskHyperparameters
+from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, Intervals, EveryNDescents, AfterNDescents
 from lamoto.training.lineages import SerialisedTokeniser, ConfigFactory, BaseModel
+from archit.instantiation.heads import MaskedLMHeadConfig
 from tktkt.util.environment import IS_NOT_LINUX
 
 

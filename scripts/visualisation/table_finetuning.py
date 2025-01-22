@@ -440,7 +440,7 @@ class GRaMPaFinetuningParser(CsvParser[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int,
                 and k.submetric in self._tasks_to_metrics_to_submetrics[k.task][k.metric]}
 
     def _to_sortkey_row(self, key: GRaMPaRowKey) -> SortableRowKeys:
-        return (VOCABS.index(key.vocab), TOKENISERS.index(key.infer), key.limit if key.limit is not None else 0, -1/key.smoothing)
+        return (VOCABS.index(key.vocab), TOKENISERS.index(key.infer), key.limit if key.limit is not None else 0, -1/(key.smoothing+0.01))
 
     def _to_sortkey_col(self, key: GRaMPaColumnKey) -> SortableColKeys:
         if key.task in TOKENLEVEL_ORDER:
@@ -472,7 +472,7 @@ class GRaMPaFinetuningParser(CsvParser[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int,
             limit     = r"$\ell_\text{min}=" + f"{key.limit}$"
             smoothing = fr"$\tau={key.smoothing}$"
         elif infer == BPEdropout:
-            limit = ""
+            limit = r"\vphantom{" + f"{key.smoothing}" + "}"  # <--- This way, fiject sees two different row values and can put a border between, whilst the human sees identical empty cells.
             smoothing = r"$\hspace*{-0.4em}" + f"p_d={key.smoothing}$"
         elif infer == ULM:
             limit     = fr"$k={key.limit}$"
