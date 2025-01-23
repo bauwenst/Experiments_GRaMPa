@@ -6,7 +6,6 @@ from collections import OrderedDict
 
 import re
 
-from fiject.visuals.tables import SignMode
 from fiject import ColumnStyle
 
 
@@ -338,6 +337,8 @@ class GRaMPaTypoParser(GRaMPaFinetuningParser):  # The generic is not correct bu
 
 
 def visualise_finetuning():
+    from fiject.visuals.tables import SignMode
+
     wandb_export = PATH_DATA_OUT / "wandb-5.csv"
 
     parser = GRaMPaFinetuningParser(TASK_TO_METRICS_TO_SUBMETRICS, SUBMETRIC_TO_FORMATTED)
