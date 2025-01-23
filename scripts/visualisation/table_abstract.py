@@ -93,7 +93,7 @@ class Parser(ABC, Generic[Instance,RawRowKeys,RawColKeys,SortableRowKeys,Sortabl
         for raw_key in sorted(keys, key=lambda k: self._permute_sortkey_col(self._to_sortkey_col(k), level_permutation)):
             yield raw_key, self._permute_formatted_col(self._format_col(raw_key), level_permutation)
 
-    def _parsePath(self, path: Path) -> Dict[RawRowKeys, Dict[RawColKeys, float]]:
+    def _getResultsFromPath(self, path: Path) -> Dict[RawRowKeys, Dict[RawColKeys, float]]:
         results = defaultdict(dict)
         for raw in self._generateInstances(path):
             key  = self._extractRowKey(raw)
@@ -115,8 +115,8 @@ class Parser(ABC, Generic[Instance,RawRowKeys,RawColKeys,SortableRowKeys,Sortabl
             results[key] |= cols
         return results
 
-    def _tabulateParsed(self, results: Dict[RawRowKeys, Dict[RawColKeys, float]], name: str,
-                        row_level_permutation: Optional[Permutation], col_level_permutation: Optional[Permutation]) -> Table:
+    def _tabulateResults(self, results: Dict[RawRowKeys, Dict[RawColKeys, float]], name: str,
+                         row_level_permutation: Optional[Permutation], col_level_permutation: Optional[Permutation]) -> Table:
         table = Table(name, overwriting=True)
         for row_key, row_formatted in self._sortAndFormatRows(results.keys(), row_level_permutation):
             for col_key, col_formatted in self._sortAndFormatCols(results[row_key].keys(), col_level_permutation):
@@ -125,8 +125,8 @@ class Parser(ABC, Generic[Instance,RawRowKeys,RawColKeys,SortableRowKeys,Sortabl
         return table
 
     def toTable(self, path: Path, stem_suffix: str="", row_level_permutation: Permutation=None, col_level_permutation: Permutation=None) -> Table:
-        return self._tabulateParsed(self._parsePath(path), path.stem + stem_suffix,
-                                    row_level_permutation=row_level_permutation, col_level_permutation=col_level_permutation)
+        return self._tabulateResults(self._getResultsFromPath(path), path.stem + stem_suffix,
+                                     row_level_permutation=row_level_permutation, col_level_permutation=col_level_permutation)
 
 
 from csv import DictReader
