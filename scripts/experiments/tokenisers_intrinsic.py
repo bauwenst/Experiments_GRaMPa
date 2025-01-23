@@ -1,4 +1,6 @@
 from scripts.preamble import *
+from scripts.visualisation.table_abstract import SortableRowKeys, FormattedKeys
+from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
 
 import time
 from typing import Iterable, List, Tuple
@@ -19,10 +21,8 @@ from tktkt.util.printing import wprint
 from tktkt.util.types import NamedIterable
 from tktkt.util.iterables import take, streamProgress
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
-
 from fiject import Table, LineGraph, CacheMode, ColumnStyle
 
-from scripts.visualisation.table_abstract import SortableRowKeys, FormattedKeys
 
 vocab = KudoPiece32ki_SlimPajama3M(specials=[])
 pretoken_generator = Preprocessor(TruncateAndNormalise(1_000_000), IdentityMapper(), TraditionalPretokeniser())
@@ -72,7 +72,6 @@ class BCF:
         return sqrt( 1/(n-ddof) * n/W * (self._ss - W*self.mean()**2) )
 
 
-from scripts.visualisation.table_finetuning import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
 class KeyFormatter(GRaMPaFinetuningParser):
     def __init__(self):
         super().__init__(dict(),dict())
@@ -225,17 +224,22 @@ def speedTest(name: str, tokeniser: Tokeniser, corpus: Iterable[str], n_examples
     print("\tStd. dev [s/tk]:", std)
 
 
+def tst_bcf():
+    L = [2, 4, 4, 4, 5, 5, 7, 9]
+    b = BCF()
+    for x in L:
+        b.add(x)
+    print(b.amount(), b.mean(), b.std())  # Should be 8, m=5, s=2.138 (Wikipedia example)
+
+
 if __name__ == "__main__":
-    # L = [2, 4, 4, 4, 5, 5, 7, 9]
-    # b = BCF()
-    # for x in L:
-    #     b.add(x)
-    # print(b.amount(), b.mean(), b.std())  # Should be 8, m=5, s=2.138 (Wikipedia example)
+    from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
 
     print("Loading dataset...")
-    corpus = NamedIterable(load_dataset("allenai/c4", "en", streaming=True)["train"], "C4").map(lambda e: e["text"])
-    N = 500
+    _, _, validation = loadCorpus(CORPUS_ID)
+    corpus = NamedIterable(validation, "C4" if IS_NOT_LINUX else "SlimPajama").map(lambda e: e["text"])
 
+    N = 75 if IS_NOT_LINUX else 20_000
     intrinsicMetrics(corpus, N)
 
     # slowdownGraph(
