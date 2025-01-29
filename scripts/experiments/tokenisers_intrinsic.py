@@ -1,42 +1,31 @@
+"""
+Tests to do with fertility and speed, metrics inherent to the tokeniser itself rather than downstream tasks,
+WITHOUT changing any hyperparameters.
+"""
 from scripts.preamble import *
+from scripts.experiments.lineages import getTokeniserFactories
 from scripts.visualisation.table_abstract import SortableRowKeys, FormattedKeys
 from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
 
 import time
 from typing import Iterable, List, Tuple
-from datasets import load_dataset, Dataset
 from math import sqrt
 
-from tktkt.factories.preprocessing import TruncateAndNormalise, TraditionalPretokeniser
 from tktkt.interfaces import Preprocessor
 from tktkt.interfaces.tokeniser import Tokeniser
-from tktkt.interfaces.factories import TokeniserFactory
+from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.evaluation.speed import secondsPerTokenisation
-from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
-from tktkt.models.random.pathmarkov import GRaMPa
-from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
-from tktkt.models.identity.segmentation import IdentityTokeniser
-from tktkt.preparation.mappers import IdentityMapper
+from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships
+from tktkt.factories.preprocessing import TruncateAndNormalise, TraditionalPretokeniser, IdentityMapper
+from tktkt.factories.tokenisers import Factory_BPE
 from tktkt.util.printing import wprint
 from tktkt.util.types import NamedIterable
 from tktkt.util.iterables import take, streamProgress
-from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
-from fiject import Table, LineGraph, CacheMode, ColumnStyle
 
+from fiject import Table, LineGraph, CacheMode, ColumnStyle, MultiHistogram, FIJECT_DEFAULTS, \
+    StreamingVariableGranularityHistogram, BinSpec, BinOverlapMode, VariableGranularityHistogram
 
-vocab = KudoPiece32ki_SlimPajama3M(specials=[])
 pretoken_generator = Preprocessor(TruncateAndNormalise(1_000_000), IdentityMapper(), TraditionalPretokeniser())
-
-
-def getTokeniserFactories() -> List[Tuple[str,TokeniserFactory]]:
-    from scripts.experiments.lineages import LINEAGES, LineageRootNode
-
-    factories = []
-    for l in LINEAGES:
-        n = l._node_tree
-        assert isinstance(n, LineageRootNode)
-        factories.append((l.name,n._tokeniser))
-    return factories
 
 
 class BCF:
@@ -72,7 +61,7 @@ class BCF:
         return sqrt( 1/(n-ddof) * n/W * (self._ss - W*self.mean()**2) )
 
 
-class KeyFormatter(GRaMPaFinetuningParser):
+class IntrinsicMetricsKeyFormatter(GRaMPaFinetuningParser):
     def __init__(self):
         super().__init__(dict(),dict())
 
@@ -86,12 +75,15 @@ class KeyFormatter(GRaMPaFinetuningParser):
         return formatted
 
 
+########################################################################################################################
+
+
 def intrinsicMetrics(corpus: NamedIterable[str], n_examples: int):
     """
     TODO: Maybe you want to do this for a lemma corpus and a real-text corpus.
           One gives more information about the tokeniser, the other about what models see in practice.
     """
-    parser = KeyFormatter()
+    parser = IntrinsicMetricsKeyFormatter()
 
     table = Table(f"intrinsics-{corpus.name}-{n_examples}", caching=CacheMode.IF_MISSING, overwriting=True)
     if table.needs_computation:
@@ -163,20 +155,124 @@ def intrinsicMetrics(corpus: NamedIterable[str], n_examples: int):
             table.set(tk_stats.m.mean(), row, ["$m$", col_mean])
             table.set(tk_stats.m.std(),  row, ["$m$", col_std])
 
+            table.set(tk_stats.S.mean(), row, [r"$\mathcal S$", col_mean])
+            table.set(tk_stats.S.std(),  row, [r"$\mathcal S$", col_std])
+
             table.set(tk_stats.l.mean(), row, [r"$\ell$", col_mean])
             table.set(tk_stats.l.std(),  row, [r"$\ell$", col_std])
 
             table.set(tk_stats.R.mean(), row, ["$R$", col_mean])
             table.set(tk_stats.R.std(),  row, ["$R$", col_std])
 
-            table.set(tk_stats.S.mean(), row, [r"$\mathcal S$", col_mean])
-            table.set(tk_stats.S.std(),  row, [r"$\mathcal S$", col_std])
-
     table.commit(
         default_column_style=ColumnStyle(do_bold_maximum=True, do_bold_minimum=True),
         borders_between_rows_of_level=[0,1,2],
         borders_between_columns_of_level=[0]
     )
+
+
+def intrinsicMetricsHistograms(tokenisers: List[Tuple[Tokeniser,str]], raw_words: NamedIterable[str], exclude_words_over_length: int=60,
+                               do_boxplots: bool=False):
+    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = raw_words.name
+
+    graph_lengths = MultiHistogram("token-length")
+    graph_amounts = MultiHistogram("amounts")
+    graph_cpt     = MultiHistogram("cpt")
+    # graph_segmentality = MultiHistogram("segmentality")
+    graph_segmentality = StreamingVariableGranularityHistogram("segmentality", BinSpec.closedFromAmount(0,1,amount=30))
+
+    for raw_word in raw_words:
+        if len(raw_word) > exclude_words_over_length or len(raw_word) < 2:
+            continue
+
+        for tokeniser,name in tokenisers:
+            tokens = tokeniser.prepareAndTokenise(raw_word)
+
+            n_chars = 0
+            for l in map(len, tokens):
+                graph_lengths.add(name, l)
+                n_chars += l
+            n_tokens = len(tokens)
+            graph_amounts.add(name, n_tokens)
+            graph_cpt    .add(name, n_chars/n_tokens)
+            # graph_segmentality.add(name, (n_tokens-1)/(n_chars-1))
+            graph_segmentality.add(n_tokens-1, n_chars, class_name=name)
+
+    if do_boxplots:
+        graph_lengths.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        graph_amounts.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        graph_cpt    .commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+        # graph_segmentality.commitWithArgs_boxplot(MultiHistogram.ArgsGlobal_BoxPlot())
+    else:
+        graph_lengths.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+            x_label="Token length",
+            center_ticks=True,
+
+            y_label="Fraction of tokens",
+            relative_counts=True
+        ))
+        graph_amounts.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+            x_label="Amount of tokens",
+            center_ticks=True,
+
+            y_label="Fraction of words",
+            relative_counts=True
+        ))
+        # graph_cpt.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+        #     x_label="Characters-per-token ratio",
+        #     binwidth=0.025,
+        #
+        #     y_label="Fraction of words",
+        #     relative_counts=True
+        # ))
+        # graph_segmentality.commitWithArgs_histplot(MultiHistogram.ArgsGlobal(
+        #     x_label="Segmentality",
+        #     binwidth=0.025,
+        #
+        #     y_label="Spread across words",
+        #     relative_counts=True
+        # ))
+        graph_segmentality.commit(StreamingVariableGranularityHistogram.ArgsGlobal(
+            x_label="Segmentality",
+            x_tickspacing=0.1,
+            histo_overlapping=BinOverlapMode.SIDE_BY_SIDE,
+
+            y_label="Spread across words",
+            relative_counts=True
+        ))
+        print(graph_segmentality.getSummaries())
+
+    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = ""
+
+
+def segmentalityHistogram(tk: Tokeniser, word_corpus: NamedIterable[str], n_samples: int=100):
+    segmentality = VariableGranularityHistogram(f"{tk.getName()}_{word_corpus.name}_{n_samples}_segmentality", caching=CacheMode.WRITE_ONLY)
+
+    if segmentality.needs_computation:
+        for word in word_corpus:
+            for _ in range(n_samples):
+                tokens = tk.prepareAndTokenise(word)
+                segmentality.add(len(tokens)-1, len("".join(tokens)))
+
+    segmentality.commit(VariableGranularityHistogram.ArgsGlobal(
+        x_label=r"Segmentality $\mathcal S$ (word tokens $\to$ character tokens)",
+        y_label="Fraction of words",
+        relative_counts=True,
+        x_tickspacing=0.1,
+        n_bins=30
+    ))
+
+
+def corpusHistograms(word_corpus: NamedIterable[str]):
+    tk = Factory_BPE().buildTokeniser()
+    visualiseCharsVersusTokensRelationships(
+        tokeniser=tk,
+        raw_words=word_corpus,
+        n_samples_per_word=1
+    )
+
+
+########################################################################################################################
 
 
 def slowdownGraph(corpus: NamedIterable[str], n_examples: int,
@@ -224,6 +320,10 @@ def speedTest(name: str, tokeniser: Tokeniser, corpus: Iterable[str], n_examples
     print("\tStd. dev [s/tk]:", std)
 
 
+########################################################################################################################
+
+
+
 def tst_bcf():
     L = [2, 4, 4, 4, 5, 5, 7, 9]
     b = BCF()
@@ -232,7 +332,7 @@ def tst_bcf():
     print(b.amount(), b.mean(), b.std())  # Should be 8, m=5, s=2.138 (Wikipedia example)
 
 
-if __name__ == "__main__":
+def main1():
     from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
 
     print("Loading dataset...")
@@ -242,6 +342,22 @@ if __name__ == "__main__":
     N = 75 if IS_NOT_LINUX else 20_000
     intrinsicMetrics(corpus, N)
 
+
+def main2():
+    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
+    from tktkt.visualisation.charts.token_distributions import visualiseTypes
+    visualiseTypes([BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])],
+                   ["BPE", "ULM"])
+
+
+if __name__ == "__main__":
+    main2()
+
+    # from tktkt.models.random.pathmarkov import GRaMPa
+    # from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
+    # from tktkt.models.identity.segmentation import IdentityTokeniser
+    # from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
+    # vocab = KudoPiece32ki_SlimPajama3M(specials=[])
     # slowdownGraph(
     #     corpus,
     #     N,

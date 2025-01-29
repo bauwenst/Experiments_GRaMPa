@@ -7,7 +7,7 @@
 #SBATCH --mem-per-cpu=3000M
 #SBATCH --mail-user=thomas.bauwens@kuleuven.be
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --time=12:00:00
+#SBATCH --time=20:00:00
 
 cd $VSC_DATA/Python/ExternalRepos/Experiments_GRaMPa/
 conda activate draft

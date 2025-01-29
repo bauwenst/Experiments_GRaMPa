@@ -7,7 +7,7 @@ from collections import OrderedDict
 import re
 
 from fiject import ColumnStyle
-
+from fiject.visuals.tables import SignMode
 
 Number = Union[int,float]
 T = TypeVar("T")
@@ -283,7 +283,19 @@ class GRaMPaFinetuningParser(CsvParser[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int,
 
     def _tabulateResults(self, results: Dict[RawRowKeys, Dict[RawColKeys, float]], name: str,
                          row_level_permutation: Optional[Permutation], col_level_permutation: Optional[Permutation]) -> Table:
+        """
+        Adds two extra columns:
+            1. Average per row;
+            2. Average difference with each row's baseline. I computed it as avg(row - baseline), but you could also
+               compute the same number as avg(row) - avg(baseline) due to linearity of E[X].
+        """
         table = super()._tabulateResults(results, name, row_level_permutation, col_level_permutation)
+
+        # Average the results of all metrics for each row (obviously won't include deltas, since they aren't results)
+        for row_key, row_formatted in self._sortAndFormatRows(results.keys(), row_level_permutation):
+            metrics = list(results[row_key].values())
+            avg     = sum(metrics) / len(metrics)
+            table.set(avg, row_formatted, AVG_COLUMN)
 
         # Find scores for baselines
         vocab_to_reference_key = dict()
@@ -306,7 +318,8 @@ class GRaMPaFinetuningParser(CsvParser[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int,
             if row_key in vocab_to_reference_key.values():
                 continue
             avg_delta = sum(deltas[row_key].values()) / len(deltas[row_key])
-            table.set(avg_delta, row_formatted, [r"\hfil$\bar\Delta$"])
+            table.set(avg_delta, row_formatted, DELTA_COLUMN)
+
         return table
 
 
@@ -333,12 +346,32 @@ class GRaMPaTypoParser(GRaMPaFinetuningParser):  # The generic is not correct bu
         return [self._submetric_to_formatting[key.submetric], typo_format]
 
 
+DELTA_COLUMN = [r"\multicolumn{1}{c}{$\bar\Delta$}"]
+AVG_COLUMN = [r"$\bar\%$"]
+EXTRA_STYLES = {
+    tuple(DELTA_COLUMN): ColumnStyle(
+        do_bold_maximum=True,
+        signs=SignMode.BOTH_INSIDE,
+        digits=2,
+        alignment="|r",  # FIXME: The fact that I have to put | here means there is a bug in Fiject.
+        cell_prefix=r"\tgrad[-5.0][0.0][+5.0]{", cell_function=lambda d: 100*d, cell_suffix="}",
+        cell_default_if_empty=r"\cellcolor{black!10}"
+    ),
+    tuple(AVG_COLUMN): ColumnStyle(
+        do_bold_maximum=True,
+        signs=SignMode.MINUS_INSIDE_NO_PLUS,
+        digits=2,
+        alignment="c",
+        cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda d: 100*d, cell_suffix="}",
+        cell_default_if_empty=r"\cellcolor{black!10}"
+    )
+}
+
+
 ########################################################################################################################
 
 
 def visualise_finetuning():
-    from fiject.visuals.tables import SignMode
-
     wandb_export = PATH_DATA_OUT / "wandb-5.csv"
 
     parser = GRaMPaFinetuningParser(TASK_TO_METRICS_TO_SUBMETRICS, SUBMETRIC_TO_FORMATTED)
@@ -348,17 +381,10 @@ def visualise_finetuning():
         borders_between_rows_of_level=[0, 1, 2],
         default_column_style=ColumnStyle(
             do_bold_maximum=True,
-            cell_prefix=r"\tgrad[0.0][0.5][1.0]{", cell_suffix="}",
+            cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda x: 100*x, cell_suffix="}",
+            digits=1,
             cell_default_if_empty=r"\cellcolor{black!10}"),
-        alternate_column_styles={
-            (r"\hfil$\bar\Delta$",): ColumnStyle(
-                do_bold_maximum=True,
-                signs=SignMode.BOTH_INSIDE,
-                alignment="|p{3em}",  # FIXME: The fact that I have to put | here means there is a bug in Fiject.
-                cell_prefix=r"\tgrad[-5.0][0.0][+5.0]{", cell_function=lambda d: 100*d, cell_suffix="}\%",
-                cell_default_if_empty=r"\cellcolor{black!10}"
-            )
-        }
+        alternate_column_styles=EXTRA_STYLES
     )
 
 
@@ -377,9 +403,11 @@ def visualise_typos():
         borders_between_rows_of_level=[0, 1, 2],
         default_column_style=ColumnStyle(
             do_bold_maximum=True,
-            cell_prefix=r"\tgrad[0.0][0.5][1.0]{", cell_suffix="}",
+            cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda x: 100*x, cell_suffix="}",
+            digits=1,
             cell_default_if_empty=r"\cellcolor{black!10}"
-        )
+        ),
+        alternate_column_styles=EXTRA_STYLES
     )
 
 

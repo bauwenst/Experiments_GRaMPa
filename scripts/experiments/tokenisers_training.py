@@ -3,11 +3,12 @@ from scripts.preamble import *
 from typing import Tuple
 from datasets import load_dataset, IterableDataset, IterableDatasetDict
 
-from tktkt.util.timing import datetimeDashed
-from tktkt.util.environment import IS_NOT_LINUX
-from tktkt.preparation.instances import *
 from tktkt.models.bpe.vocabularisation import BPEVocabulariser, BpeTrainerImplementation
 from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser, KudoPieceArguments
+from tktkt.factories.preprocessing import ModernEnglishPreprocessor_ByteCompatible, \
+    SentencePiecePreprocessor_SpaceConcatenable, RobertaSpaceMarker
+from tktkt.util.timing import datetimeDashed
+from tktkt.util.environment import IS_NOT_LINUX
 
 
 TRUNCATE_INPUT_AFTER = 8192

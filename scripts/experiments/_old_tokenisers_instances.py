@@ -4,24 +4,8 @@ from scripts.experiments.tokenisers_training import MARKER
 
 from typing import Tuple
 
-from tktkt.interfaces import Preprocessor, Vocab
 from tktkt.interfaces.tokeniser import TokeniserWithFiniteTypeDomain
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
-from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
-from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser
-
-
-class KudoPiece32ki_SlimPajama3M_Old(KudoPiece32ki_SlimPajama3M):
-    def _buildVocabulary(self) -> Vocab:
-        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
-                                           existing_types={"<pad>": 0, "<mask>": 1, "<unk>": 2, "<s>": 3, "</s>": 4})
-
-
-class KudoPiece32ki_SlimPajama3M_New(KudoPiece32ki_SlimPajama3M):
-    def _buildVocabulary(self) -> Vocab:
-        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
-                                           existing_types=self._specials,
-                                           extras_first=False)
 
 
 def getTokeniserByModelId(model_id: int) -> Tuple[TokeniserWithFiniteTypeDomain, str]:

@@ -1,5 +1,8 @@
+"""
+Experiments to do with varying the hyperparameters of the tokenisers.
+"""
 from scripts.preamble import *
-from scripts.experiments.tokenisers_instances import *
+from scripts.experiments.lineages import *
 from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from typing import Iterable, Tuple
@@ -7,23 +10,25 @@ import numpy as np
 
 from tktkt.evaluation.entropy import renyiEfficiency, tokenDistributionFromSentences
 from tktkt.evaluation.compare import ExactMatches
-from tktkt.models.random.pathmarkov import RandomVocabSegmentation_GreedyMarkov, PowerNormalisation
+from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships, visualiseSingleWordSegmentationDistribution
+from tktkt.models.random.pathmarkov import PowerNormalisation, GRaMPa
 from tktkt.models.kudopiece.segmentation import KudoPieceTokeniser
-from tktkt.preparation.instances import TraditionalPreprocessor
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
+from tktkt.factories.preprocessing import TraditionalPreprocessor
+from tktkt.factories.tokenisers import Factory_GRaMPa
 from tktkt.util.types import NamedIterable
 from tktkt.util.printing import wprint
 from tktkt.util.environment import IS_NOT_LINUX
+from tktkt.util.iterables import streamProgress
 
-from fiject import LineGraph, CacheMode
-
+from fiject import LineGraph, CacheMode, StreamingMultiHistogram, BinSpec
 
 LOW_KEY  = r"$H_\alpha/\lceil H_0\rceil$"
 MID_KEY  = r"$H_\alpha/H_0$"
 HIGH_KEY = r"$\lceil H_\alpha \rceil/H_0$"
 
 
-def searchTemperatures(markov_tokeniser: RandomVocabSegmentation_GreedyMarkov, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
+def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
     normaliser = markov_tokeniser.renormalisation
     assert isinstance(normaliser, PowerNormalisation)
     normaliser.resetTemperature(0)
@@ -189,7 +194,7 @@ def main_temperature(bpe_not_ulm: bool):
     else:
         switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l_min=2).buildTokeniser()
     grampa = switch.subtokenisers[1]
-    assert isinstance(grampa, RandomVocabSegmentation_GreedyMarkov)
+    assert isinstance(grampa, GRaMPa)
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
@@ -205,6 +210,125 @@ def main_temperature(bpe_not_ulm: bool):
         grampa,
         NamedIterable(validation_corpus, name=("bpe" if bpe_not_ulm else "kudo") + "_" + validation_corpus.info.dataset_name).map(lambda example: example["text"]),
         temperature_grid=temperatures
+    ))
+
+
+def intrinsicsVersusTemperature_word(word: str, unconstrained: bool=True):
+    tk = Factory_GRaMPa(minimal_length=2, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
+    renorm = tk.renormalisation
+    assert isinstance(renorm, PowerNormalisation)
+
+    # Infinite domain so that we can measure the effect of temperature in a histogram with LOC ordering without weird shit.
+    tk.enableInfiniteDomain(unconstrained)
+
+    # for temperature in [1.0, 1.025, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]:
+    for temperature in [1.0]:
+        renorm.resetTemperature(temperature)
+        visualiseSingleWordSegmentationDistribution(
+            tokeniser=tk,
+            word=word,
+            samples=100_000,  # TODO: Recommended for official graphs is 500_000
+            segmentation_histogram_max_bins=2**9,
+            do_bitbased_ordering=False
+        )
+
+
+def intrinsicsVersusTemperature_corpus_withSubHistograms(corpus: NamedIterable[str], unconstrained: bool=True):
+    tk = Factory_GRaMPa(minimal_length=2, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
+    renorm = tk.renormalisation
+    assert isinstance(renorm, PowerNormalisation)
+
+    # Infinite domain so that we can measure the effect of temperature in a histogram with LOC ordering without weird shit.
+    tk.enableInfiniteDomain(unconstrained)
+
+    renorm.resetTemperature(1)
+    segmentality = LineGraph(f"{tk.getName()}_{corpus.name}_t-vs-segmentality", caching=CacheMode.WRITE_ONLY)
+    length       = LineGraph(f"{tk.getName()}_{corpus.name}_t-vs-length", caching=CacheMode.WRITE_ONLY)
+
+    if segmentality.needs_computation or length.needs_computation:
+        for t in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, -100.0, -50.0, -40.0, -30.0, -20.0, -10.0, -5.0, -4.0, -3.0, -2.0, -1.0, -0.1]:
+        # for t in [-1e-15, -1e-14, -1e-13, -1e-12, -1e-11, -1e-10, -1e-9, -1e-8, -1e-7, -1e-6, -1e-5, -1e-4, -1e-3, -1e-2, -1e-1, -1]:
+            renorm.resetTemperature(t)
+            (seg_mean, seg_mode, seg_std), (length_mean, length_mode, length_std) = visualiseCharsVersusTokensRelationships(
+                tokeniser=tk,
+                raw_words=corpus,
+                n_samples_per_word=100
+            )
+
+            segmentality.add("mean", t, seg_mean)
+            # segmentality.add("mode", t, seg_mode)
+            segmentality.add("std", t, seg_std)
+
+            length.add("mean", t, length_mean)
+            # length.add("mode", t, length_mode)
+            length.add("std", t, length_std)
+
+    segmentality.commitWithArgs(
+        LineGraph.ArgsGlobal(
+            x_label="Temperature",
+            y_label="Segmentality",
+            logx=True,
+            logx_becomes_linear_at=0.1
+        ),
+        LineGraph.ArgsPerLine()
+    )
+    length.commitWithArgs(
+        LineGraph.ArgsGlobal(
+            x_label="Temperature",
+            y_label="Token length",
+            logx=True,
+            logx_becomes_linear_at=1e-15
+        ),
+        LineGraph.ArgsPerLine()
+    )
+
+
+def intrinsicsVersusTemperature_corpus(tk: GRaMPa, word: str, corpus: NamedIterable[str]):
+    n_chars = len("".join(tk.prepareAndTokenise(word)))
+
+    histo_across_amounts = StreamingMultiHistogram(f"amounts_{word}_{tk.getName()}", BinSpec.closedFromAmount(minimum=1, maximum=n_chars+1, amount=n_chars),
+                                                   caching=CacheMode.IF_MISSING)
+    token_counts = StreamingMultiHistogram(f"count-tokens_{corpus.name}_{tk.getName()}",
+                                           BinSpec.halfopen(minimum=0, width=50), caching=CacheMode.IF_MISSING)
+
+    renorm = tk.renormalisation
+    assert isinstance(renorm, PowerNormalisation)
+
+    temperatures = [1.0, 5.0, -10.0]
+
+    tk.enableInfiniteDomain(True)
+    for t in temperatures:
+        name = rf"$\tau = {t}$"
+        renorm.resetTemperature(t)
+        for _ in streamProgress(range(100_000)):
+            tokens = tk.prepareAndTokenise(word)
+            histo_across_amounts.add(name, len(tokens))
+
+    histo_across_amounts.commit(StreamingMultiHistogram.ArgsGlobal(
+        x_label="Amount of tokens $m$",
+        x_tickspacing=1,
+        x_center_ticks=True,
+
+        y_label=f"Fraction of samples",
+        relative_counts=True
+    ))
+
+    tk.enableInfiniteDomain(False)
+    for example in streamProgress(corpus):
+        for t in temperatures:
+            name = rf"$\tau = {t}$"
+            renorm.resetTemperature(t)
+            for _ in range(100):
+                tokens = tk.prepareAndTokenise(example)
+                token_counts.add(name, len(tokens))
+
+    token_counts.commit(StreamingMultiHistogram.ArgsGlobal(
+        x_tickspacing=256,
+        x_label="Amount of tokens",
+        x_lims=(None,3_000),
+
+        y_label="Examples in corpus",
+        relative_counts=True
     ))
 
 
