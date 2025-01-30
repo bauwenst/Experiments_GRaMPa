@@ -3,6 +3,7 @@ Tests to do with fertility and speed, metrics inherent to the tokeniser itself r
 WITHOUT changing any hyperparameters.
 """
 from scripts.preamble import *
+from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
 from scripts.experiments.lineages import getTokeniserFactories
 from scripts.visualisation.table_abstract import SortableRowKeys, FormattedKeys
 from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
@@ -20,12 +21,20 @@ from tktkt.factories.preprocessing import TruncateAndNormalise, TraditionalPreto
 from tktkt.factories.tokenisers import Factory_BPE
 from tktkt.util.printing import wprint
 from tktkt.util.types import NamedIterable
-from tktkt.util.iterables import take, streamProgress
+from tktkt.util.iterables import take, streamProgress, mapExtend
 
 from fiject import Table, LineGraph, CacheMode, ColumnStyle, MultiHistogram, FIJECT_DEFAULTS, \
-    StreamingVariableGranularityHistogram, BinSpec, BinOverlapMode, VariableGranularityHistogram
+    StreamingVariableGranularityHistogram, BinSpec, BinOverlapMode, VariableGranularityHistogram, StreamingStochasticLineGraph
 
 pretoken_generator = Preprocessor(TruncateAndNormalise(1_000_000), IdentityMapper(), TraditionalPretokeniser())
+def pretokenIterableFromCorpus(line_iterable: NamedIterable[str]) -> NamedIterable[str]:
+    """Turns a named iterable of texts into a named iterable of words."""
+    return line_iterable.flatmap(pretoken_generator.do)
+
+
+def loadCorpusAsNamedIterable() -> NamedIterable[str]:
+    _, _, validation = loadCorpus(CORPUS_ID)
+    return NamedIterable(validation, "C4" if IS_NOT_LINUX else "SlimPajama").map(lambda e: e["text"])
 
 
 class BCF:
@@ -78,14 +87,14 @@ class IntrinsicMetricsKeyFormatter(GRaMPaFinetuningParser):
 ########################################################################################################################
 
 
-def intrinsicMetrics(corpus: NamedIterable[str], n_examples: int):
+def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int):
     """
     TODO: Maybe you want to do this for a lemma corpus and a real-text corpus.
           One gives more information about the tokeniser, the other about what models see in practice.
     """
     parser = IntrinsicMetricsKeyFormatter()
 
-    table = Table(f"intrinsics-{corpus.name}-{n_examples}", caching=CacheMode.IF_MISSING, overwriting=True)
+    table = Table(f"intrinsics-{line_iterable.name}-{n_examples}", caching=CacheMode.IF_MISSING, overwriting=True)
     if table.needs_computation:
         # Get the tokenisers.
         keys       = []
@@ -131,7 +140,7 @@ def intrinsicMetrics(corpus: NamedIterable[str], n_examples: int):
         ###
 
         # Iterate over all pretokens in the dataset, tokenising them and collecing statistics.
-        for text in streamProgress(take(n_examples, corpus), known_size=n_examples):
+        for text in streamProgress(take(n_examples, line_iterable), known_size=n_examples):
             for pretoken in pretoken_generator.do(text):
                 for _, tk, tk_stats in keys_tokenisers_metrics:
                     tokens = tk.prepareAndTokenise(pretoken)
@@ -171,9 +180,9 @@ def intrinsicMetrics(corpus: NamedIterable[str], n_examples: int):
     )
 
 
-def intrinsicMetricsHistograms(tokenisers: List[Tuple[Tokeniser,str]], raw_words: NamedIterable[str], exclude_words_over_length: int=60,
+def intrinsicMetricsHistograms(tokenisers: List[Tuple[Tokeniser,str]], pretoken_iterable: NamedIterable[str], exclude_words_over_length: int=60,
                                do_boxplots: bool=False):
-    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = raw_words.name
+    FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = pretoken_iterable.name
 
     graph_lengths = MultiHistogram("token-length")
     graph_amounts = MultiHistogram("amounts")
@@ -181,7 +190,7 @@ def intrinsicMetricsHistograms(tokenisers: List[Tuple[Tokeniser,str]], raw_words
     # graph_segmentality = MultiHistogram("segmentality")
     graph_segmentality = StreamingVariableGranularityHistogram("segmentality", BinSpec.closedFromAmount(0,1,amount=30))
 
-    for raw_word in raw_words:
+    for raw_word in pretoken_iterable:
         if len(raw_word) > exclude_words_over_length or len(raw_word) < 2:
             continue
 
@@ -245,11 +254,11 @@ def intrinsicMetricsHistograms(tokenisers: List[Tuple[Tokeniser,str]], raw_words
     FIJECT_DEFAULTS.GLOBAL_STEM_PREFIX = ""
 
 
-def segmentalityHistogram(tk: Tokeniser, word_corpus: NamedIterable[str], n_samples: int=100):
-    segmentality = VariableGranularityHistogram(f"{tk.getName()}_{word_corpus.name}_{n_samples}_segmentality", caching=CacheMode.WRITE_ONLY)
+def segmentalityHistogram(tk: Tokeniser, pretoken_iterable: NamedIterable[str], n_samples: int=100):
+    segmentality = VariableGranularityHistogram(f"{tk.getName()}_{pretoken_iterable.name}_{n_samples}_segmentality", caching=CacheMode.WRITE_ONLY)
 
     if segmentality.needs_computation:
-        for word in word_corpus:
+        for word in pretoken_iterable:
             for _ in range(n_samples):
                 tokens = tk.prepareAndTokenise(word)
                 segmentality.add(len(tokens)-1, len("".join(tokens)))
@@ -275,7 +284,7 @@ def corpusHistograms(word_corpus: NamedIterable[str]):
 ########################################################################################################################
 
 
-def slowdownGraph(corpus: NamedIterable[str], n_examples: int,
+def slowdownGraph(line_iterable: NamedIterable[str], n_examples: int,
                   tokenisers: List[Tokeniser]):
     """
     Tests how Cognetta slows down over a corpus when you gradually increase the word length limit.
@@ -285,29 +294,35 @@ def slowdownGraph(corpus: NamedIterable[str], n_examples: int,
     6 limits implies 150 minutes (2.5 hours).
     """
     LIMITS = [5, 10, 15, 20, 25, 30]
-    metrics = [[BCF() for _ in LIMITS] for _ in tokenisers]
 
-    graph = LineGraph(f"slowdown-{corpus.name}-{n_examples}", caching=CacheMode.IF_MISSING)
+    graph = StreamingStochasticLineGraph(f"slowdown-{line_iterable.name}-{n_examples}", caching=CacheMode.IF_MISSING)
     if graph.needs_computation:
         # Test that the tokenisers work
         for t in tokenisers:
             t.prepareAndTokenise("This is a test sentence.")
 
         # Per-tokeniser
-        for l_idx, limit in enumerate(LIMITS):
+        for limit in LIMITS:
             wprint("Limit:", limit)
-            for text in streamProgress(take(n_examples, corpus), known_size=n_examples):
+            for text in streamProgress(take(n_examples, line_iterable), known_size=n_examples):
                 for pretoken in pretoken_generator.do(text):
                     pretoken_limited = pretoken[:limit]
-                    for t_idx, t in enumerate(tokenisers):
+                    for tk in tokenisers:
                         start = time.perf_counter()
-                        t.prepareAndTokenise(pretoken_limited)
+                        tk.prepareAndTokenise(pretoken_limited)
                         end = time.perf_counter()
 
-                        metrics[t_idx][l_idx].add(end-start)
+                        graph.addSample(tk.getName(), limit, end-start)
 
-    # TODO: Now put it in a graph that supports highlighting standard deviation.
-    # from fiject import StochasticLineGraph
+    graph.commit(
+        StreamingStochasticLineGraph.ArgsGlobal(
+            x_label="Pretoken truncation limit [chars]",
+            y_label="Time per pretoken [s]",
+
+            uncertainty_opacity=0.25
+        ),
+        StreamingStochasticLineGraph.ArgsPerLine()
+    )
 
 
 def speedTest(name: str, tokeniser: Tokeniser, corpus: Iterable[str], n_examples: int):
@@ -323,7 +338,6 @@ def speedTest(name: str, tokeniser: Tokeniser, corpus: Iterable[str], n_examples
 ########################################################################################################################
 
 
-
 def tst_bcf():
     L = [2, 4, 4, 4, 5, 5, 7, 9]
     b = BCF()
@@ -333,25 +347,90 @@ def tst_bcf():
 
 
 def main1():
-    from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
-
-    print("Loading dataset...")
-    _, _, validation = loadCorpus(CORPUS_ID)
-    corpus = NamedIterable(validation, "C4" if IS_NOT_LINUX else "SlimPajama").map(lambda e: e["text"])
-
-    N = 75 if IS_NOT_LINUX else 20_000
-    intrinsicMetrics(corpus, N)
+    """
+    Generate table with inference metrics across the project corpus.
+    """
+    intrinsicMetrics(loadCorpusAsNamedIterable(), n_examples=75 if IS_NOT_LINUX else 20_000)
 
 
 def main2():
+    """
+    Generate histogram of vocabulary type lengths.
+    """
     from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
     from tktkt.visualisation.charts.token_distributions import visualiseTypes
     visualiseTypes([BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])],
                    ["BPE", "ULM"])
 
 
+def main3():
+    """
+    For each of the vocabularies, generate hypothetical vocabulary fertility stats across the project corpus.
+    """
+    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
+    from tktkt.models.identity.segmentation import IdentityTokeniserWithVocab
+    from tktkt.evaluation.fertility import getVocabStats
+
+    deserialisers = [BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])]
+    pretokens = pretokenIterableFromCorpus(loadCorpusAsNamedIterable())
+    for d in deserialisers:
+        print(d.__class__.__name__)
+        print("\t", getVocabStats(prep_and_vocab=IdentityTokeniserWithVocab(preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary()),
+                                  raw_words=pretokens,
+                                  do_log_segmentations=True))
+
+
+def main4():
+    from tktkt.evaluation.entropy import segmentationDistributionFromWord, analyseSegmentationDistribution
+    N = 100_000
+    # TODO: You should average this across many words. To average entropy, you may want to turn it into efficiency.
+    print(tk.getName())
+    print("\t", analyseSegmentationDistribution(segmentationDistributionFromWord(tk, "antidisestablishmentarianism", N), N, deterministic_segmentation=None))
+
+
 if __name__ == "__main__":
-    main2()
+    main3()
+
+    # from tktkt.util.iterables import keepFirst
+    # from tktkt.util.types import NamedIterable
+    #
+    # from bpe_knockout import morphologyGenerator, KnockoutDataConfiguration, setupEnglish
+    #
+    # class DummyIterableThatJustMakesGenerators(Iterable):
+    #     def __iter__(self):
+    #         with KnockoutDataConfiguration(setupEnglish()):
+    #             return keepFirst(o.word for o in morphologyGenerator(verbose=True))
+    # word_corpus = NamedIterable(DummyIterableThatJustMakesGenerators(), name="celex-en-lemmata")
+
+    # tk = createTokeniser_SwitchyGrampa_BPE(t=1.0, l=1).subtokenisers[1]
+    # assert isinstance(tk, RandomVocabSegmentation_GreedyMarkov)
+    # tk.enableInfiniteDomain(enable=False)
+    # plot_segmentality(tk, word_corpus)
+
+    ###
+
+    # _,_,validation = loadCorpus(CORPUS_ID)
+    # corpus = NamedIterable(validation, name=validation.info.dataset_name).map(lambda example: example["text"])
+    # word = "antidisestablishmentarianism"
+    # plot_histogramShiftsWithTemperature(tk, word, corpus)
+
+    # main_GRaMPa_word(word, unconstrained=True)
+    # main_BPE_corpus(corpus)
+    # main_GRaMPa_corpus(corpus, unconstrained=True)
+
+    # plot_fertilities(tokenisers, raw_words=word_corpus)
+
+    # visualiseCharsVersusTokensRelationships(
+    #     tokeniser=tk,
+    #     raw_words=corpus,
+    #     n_samples_per_word=100
+    # )
+    # visualiseSingleWordSegmentationDistribution(
+    #     tokeniser=tk,
+    #     word=word,
+    #     samples=100_000,
+    #     segmentation_histogram_max_bins=2**9
+    # )
 
     # from tktkt.models.random.pathmarkov import GRaMPa
     # from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
