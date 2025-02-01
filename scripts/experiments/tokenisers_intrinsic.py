@@ -11,11 +11,13 @@ from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPa
 import time
 from typing import Iterable, List, Tuple
 from math import sqrt
+from collections import Counter
 
 from tktkt.interfaces import Preprocessor
 from tktkt.interfaces.tokeniser import Tokeniser
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.evaluation.speed import secondsPerTokenisation
+from tktkt.evaluation.entropy import bitKeyFromTokens, normaliseCounter, analyseSegmentationDistribution
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships
 from tktkt.factories.preprocessing import TruncateAndNormalise, TraditionalPretokeniser, IdentityMapper
 from tktkt.factories.tokenisers import Factory_BPE
@@ -34,7 +36,7 @@ def pretokenIterableFromCorpus(line_iterable: NamedIterable[str]) -> NamedIterab
 
 def loadCorpusAsNamedIterable() -> NamedIterable[str]:
     _, _, validation = loadCorpus(CORPUS_ID)
-    return NamedIterable(validation, "C4" if IS_NOT_LINUX else "SlimPajama").map(lambda e: e["text"])
+    return NamedIterable(validation, name=validation.info.dataset_name).map(lambda e: e["text"])
 
 
 class BCF:
@@ -64,10 +66,9 @@ class BCF:
     def mean(self) -> float:
         return self._ls / self.weight()
 
-    def std(self, ddof: int=1) -> float:
-        n = self.amount()
+    def std(self, ddof: int=1) -> float:  # Only correct when weights represent frequencies.
         W = self.weight()
-        return sqrt( 1/(n-ddof) * n/W * (self._ss - W*self.mean()**2) )
+        return sqrt( 1/(W-ddof) * (self._ss - W*self.mean()**2) )
 
 
 class IntrinsicMetricsKeyFormatter(GRaMPaFinetuningParser):
@@ -87,18 +88,20 @@ class IntrinsicMetricsKeyFormatter(GRaMPaFinetuningParser):
 ########################################################################################################################
 
 
-def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int):
+def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_samples_per_pretoken: int=1):
     """
     TODO: Maybe you want to do this for a lemma corpus and a real-text corpus.
           One gives more information about the tokeniser, the other about what models see in practice.
     """
     parser = IntrinsicMetricsKeyFormatter()
 
-    table = Table(f"intrinsics-{line_iterable.name}-{n_examples}", caching=CacheMode.IF_MISSING, overwriting=True)
-    if table.needs_computation:
+    table = Table(f"intrinsics-{line_iterable.name}-{n_examples}×{n_samples_per_pretoken}", caching=CacheMode.IF_MISSING, overwriting=True)
+    table2 = Table(f"entropies-{line_iterable.name}-{n_examples}×{n_samples_per_pretoken}", caching=CacheMode.IF_MISSING, overwriting=True)
+    if table.needs_computation or table2.needs_computation:
         # Get the tokenisers.
         keys       = []
         tokenisers = []
+        is_deterministic = []
         vocabs_with_deterministic_tk = set()
         for n,f in getTokeniserFactories():
             key = parser._extractRowKey({"Name": n})
@@ -109,6 +112,7 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int):
                     if "GRaMPa" in tk.getName():  # ---> The GRaMPa part.
                         keys.append(key)
                         tokenisers.append(tk)
+                        is_deterministic.append(False)
                     elif key.vocab not in vocabs_with_deterministic_tk:  # ---> The non-GRaMPa part for a vocab we don't have the tokeniser of already.
                         vocabs_with_deterministic_tk.add(key.vocab)
 
@@ -119,63 +123,115 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int):
                         else:
                             raise NotImplementedError
                         tokenisers.append(tk)
+                        is_deterministic.append(True)
             else:
                 keys.append(key)
                 tokenisers.append(tk)
+                is_deterministic.append(False)
 
         # Initialise the metrics per tokeniser.
         class IntrinsicMetrics:
             def __init__(self):
-                self.l = BCF()
                 self.m = BCF()
-                self.R = BCF()
                 self.S = BCF()
+                self.l = BCF()
+                self.R = BCF()
+
+                self.uniqueness         = BCF()
+                self.rr_versus_argmax   = BCF()  # Intuitively, this is always larger than uniqueness. Uniqueness measures for each segmentation if it is different from ALL segmentations so far. RR measures for each segmentation if it is different from one particular segmentation.
+                self.eff_all            = BCF()
+                self.eff_without_argmax = BCF()
 
         metrics = [IntrinsicMetrics() for _ in tokenisers]
-        keys_tokenisers_metrics = list(zip(keys,tokenisers,metrics))
+        keys_tokenisers_determinism_metrics = list(zip(keys,tokenisers,is_deterministic,metrics))
 
         ###
-        for k,t,m in keys_tokenisers_metrics:
-            print(t, parser._to_sortkey_row(k), parser._format_row(k), sep="\n\t")
+        print("Tested tokenisers:")
+        for k,t,d,m in keys_tokenisers_determinism_metrics:
+            print(t, d, parser._to_sortkey_row(k), parser._format_row(k), sep="\n\t")
         ###
 
-        # Iterate over all pretokens in the dataset, tokenising them and collecing statistics.
+        # Iterate over all pretokens in the dataset, tokenising them and collecting statistics.
         for text in streamProgress(take(n_examples, line_iterable), known_size=n_examples):
             for pretoken in pretoken_generator.do(text):
-                for _, tk, tk_stats in keys_tokenisers_metrics:
-                    tokens = tk.prepareAndTokenise(pretoken)
+                for _, tk, is_det, tk_stats in keys_tokenisers_determinism_metrics:
+                    segmentation_distribution = Counter()
+                    for _ in range(n_samples_per_pretoken if not is_det else 1):
+                        tokens = tk.prepareAndTokenise(pretoken)
 
-                    s = sum(map(len,tokens))  # Preprocessor-specific.
-                    m = len(tokens)
-                    for token in tokens:
-                        l = len(token)
-                        tk_stats.l.add(l)
-                    R = s/m
-                    S = (m-1)/(s-1)
-                    tk_stats.m.add(m)
-                    tk_stats.R.add(R)
-                    tk_stats.S.add(S)
+                        # Update count metrics
+                        s = sum(map(len,tokens))  # Preprocessor-specific.
+                        m = len(tokens)
+                        for token in tokens:
+                            l = len(token)
+                            tk_stats.l.add(l)
+                        R = s/m
+                        S = (m-1)/(s-1)
+                        tk_stats.m.add(m)
+                        tk_stats.R.add(R)
+                        tk_stats.S.add(S)
 
-        for key, tk, tk_stats in sorted(keys_tokenisers_metrics, key=lambda t: parser._to_sortkey_row(t[0])):
+                        # Update segmentation distribution
+                        segmentation_distribution[bitKeyFromTokens(tokens, bin_size=1)] += 1
+
+                    distributional_stats = analyseSegmentationDistribution(
+                        normaliseCounter(segmentation_distribution),
+                        n_samples_used=n_samples_per_pretoken if not is_det else 1,
+                        bin_size_used=1
+                    )
+                    tk_stats.uniqueness        .add(distributional_stats.uniqueness)
+                    tk_stats.eff_all           .add(distributional_stats.efficiency_all)
+                    tk_stats.eff_without_argmax.add(distributional_stats.efficiency_no_argmax)
+                    tk_stats.rr_versus_argmax  .add(distributional_stats.regularisation_rate_argmax)
+
+        for key, tk, _, tk_stats in sorted(keys_tokenisers_determinism_metrics, key=lambda t: parser._to_sortkey_row(t[0])):
             row = parser._format_row(key)
             col_mean = "mean"
             col_std  = "std"
+            versus_argmax = r"\leftrightarrow\max"
 
-            table.set(tk_stats.m.mean(), row, ["$m$", col_mean])
-            table.set(tk_stats.m.std(),  row, ["$m$", col_std])
+            # First table
+            col = "$m$"
+            table.set(tk_stats.m.mean(), row, [col, col_mean])
+            table.set(tk_stats.m.std(),  row, [col, col_std])
 
-            table.set(tk_stats.S.mean(), row, [r"$\mathcal S$", col_mean])
-            table.set(tk_stats.S.std(),  row, [r"$\mathcal S$", col_std])
+            col = r"$\mathcal S$"
+            table.set(tk_stats.S.mean(), row, [col, col_mean])
+            table.set(tk_stats.S.std(),  row, [col, col_std])
 
-            table.set(tk_stats.l.mean(), row, [r"$\ell$", col_mean])
-            table.set(tk_stats.l.std(),  row, [r"$\ell$", col_std])
+            col = r"$\ell$"
+            table.set(tk_stats.l.mean(), row, [col, col_mean])
+            table.set(tk_stats.l.std(),  row, [col, col_std])
 
-            table.set(tk_stats.R.mean(), row, ["$R$", col_mean])
-            table.set(tk_stats.R.std(),  row, ["$R$", col_std])
+            col = "$R$"
+            table.set(tk_stats.R.mean(), row, [col, col_mean])
+            table.set(tk_stats.R.std(),  row, [col, col_std])
+
+            # Second table
+            col = "$H_1/H_0$"
+            table2.set(tk_stats.eff_all.mean(), row, [col, col_mean])
+            table2.set(tk_stats.eff_all.std(),  row, [col, col_std])
+
+            col = "$H_1^{" + versus_argmax + "}/H_0^{" + versus_argmax + "}$"
+            table2.set(tk_stats.eff_without_argmax.mean(), row, [col, col_mean])
+            table2.set(tk_stats.eff_without_argmax.std(),  row, [col, col_std])
+
+            col = r"RR${}^{" + versus_argmax + "}$"
+            table2.set(tk_stats.rr_versus_argmax.mean(), row, [col, col_mean])
+            table2.set(tk_stats.rr_versus_argmax.std(),  row, [col, col_std])
+
+            col = "RR${}^*$"
+            table2.set(tk_stats.uniqueness.mean(), row, [col, col_mean])
+            table2.set(tk_stats.uniqueness.std(),  row, [col, col_std])
 
     table.commit(
         default_column_style=ColumnStyle(do_bold_maximum=True, do_bold_minimum=True),
         borders_between_rows_of_level=[0,1,2],
+        borders_between_columns_of_level=[0]
+    )
+    table2.commit(
+        default_column_style=ColumnStyle(do_bold_maximum=True, do_bold_minimum=True),
+        borders_between_rows_of_level=[0, 1, 2],
         borders_between_columns_of_level=[0]
     )
 
@@ -349,8 +405,15 @@ def tst_bcf():
 def main1():
     """
     Generate table with inference metrics across the project corpus.
+
+    37 minutes for 200x10 examples on my home i7.
+    We want to multiply that by at least 100... oh oh.
     """
-    intrinsicMetrics(loadCorpusAsNamedIterable(), n_examples=75 if IS_NOT_LINUX else 20_000)
+    intrinsicMetrics(
+        loadCorpusAsNamedIterable(),
+        n_examples=200 if IS_NOT_LINUX else 20_000,
+        n_samples_per_pretoken=10  # ---> TODO: This number should be high enough to get a solid entropy estimate. Going to be very slow lmao
+    )
 
 
 def main2():
@@ -380,16 +443,8 @@ def main3():
                                   do_log_segmentations=True))
 
 
-def main4():
-    from tktkt.evaluation.entropy import segmentationDistributionFromWord, analyseSegmentationDistribution
-    N = 100_000
-    # TODO: You should average this across many words. To average entropy, you may want to turn it into efficiency.
-    print(tk.getName())
-    print("\t", analyseSegmentationDistribution(segmentationDistributionFromWord(tk, "antidisestablishmentarianism", N), N, deterministic_segmentation=None))
-
-
 if __name__ == "__main__":
-    main3()
+    main1()
 
     # from tktkt.util.iterables import keepFirst
     # from tktkt.util.types import NamedIterable

@@ -19,11 +19,10 @@ if IS_NOT_LINUX:
     # CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")  # Has no validation split
     CORPUS_ID = ("allenai/c4", "en")
     VALIDATION_CORPUS_SIZE = 1_000  # For tuning the GRaMPa hyperparameters.
-    # CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
 else:
     TRAINING_CORPUS_SIZE = 3_000_000  # Needs >200 GiB RAM for KudoPiece.
     VALIDATION_CORPUS_SIZE = 20_000  # For tuning the GRaMPa hyperparameters.
-    CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 10 minutes to start streaming....
+    CORPUS_ID = ("cerebras/SlimPajama-627B",)  # Takes 5-ish minutes to start streaming.
 
 
 VOCAB_SIZE = 32768
@@ -38,7 +37,7 @@ def loadCorpus(corpus_id: Tuple[str,...], train_size: int=TRAINING_CORPUS_SIZE, 
     if corpus_id in cache:
         return cache[corpus_id]
 
-    print(datetimeDashed(), "Loading lazy corpus...")
+    print(datetimeDashed(), f"Loading lazy corpus {'/'.join(corpus_id)}...")
     corpus_splits: IterableDatasetDict = load_dataset(*corpus_id, streaming=True, trust_remote_code=True)
     print(datetimeDashed(), "Finished loading. Taking sizes", (train_size, validation_size))
     print(corpus_splits)

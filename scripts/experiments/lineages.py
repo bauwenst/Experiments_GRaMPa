@@ -183,5 +183,6 @@ def getTokeniserFactories() -> List[Tuple[str,TokeniserFactory]]:
     for l in LINEAGES:
         n = l._node_tree
         assert isinstance(n, LineageRootNode)
+        assert isinstance(n._tokeniser, TokeniserFactory)
         factories.append((l.name,n._tokeniser))
     return factories
