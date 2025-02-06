@@ -23,6 +23,9 @@ from tktkt.util.iterables import streamProgress
 
 from fiject import LineGraph, CacheMode, StreamingMultiHistogram, BinSpec
 
+from matplotlib import rc
+rc("text.latex", preamble=r"\DeclareUnicodeCharacter{2581}{\_}")
+
 LOW_KEY  = r"$H_\alpha/\lceil H_0\rceil$"
 MID_KEY  = r"$H_\alpha/H_0$"
 HIGH_KEY = r"$\lceil H_\alpha \rceil/H_0$"
@@ -214,7 +217,7 @@ def main_temperature(bpe_not_ulm: bool):
 
 
 def intrinsicsVersusTemperature_word(word: str, unconstrained: bool=True):
-    tk = Factory_GRaMPa(minimal_length=2, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
+    tk = Factory_GRaMPa(minimal_length=1, vocab_file=KudoPiece32ki_SlimPajama3M()).buildTokeniser()
     renorm = tk.renormalisation
     assert isinstance(renorm, PowerNormalisation)
 
@@ -222,12 +225,15 @@ def intrinsicsVersusTemperature_word(word: str, unconstrained: bool=True):
     tk.enableInfiniteDomain(unconstrained)
 
     # for temperature in [1.0, 1.025, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]:
-    for temperature in [1.0]:
+    # for temperature in [1.0]:
+    for temperature in [1.0, 1.025, 1.05, 1.1, 1.15, 1.2]:
+    # for temperature in [2.0, 3.0, 4.0, 5.0]:
+    # for temperature in [5.0]:
         renorm.resetTemperature(temperature)
         visualiseSingleWordSegmentationDistribution(
-            tokeniser=tk,
+            tokenisers=[tk],
             word=word,
-            samples=100_000,  # TODO: Recommended for official graphs is 500_000
+            samples=500_000,  # TODO: Recommended for official graphs is 500_000
             segmentation_histogram_max_bins=2**9,
             do_bitbased_ordering=False
         )
@@ -451,7 +457,8 @@ def main_compareChosenBPEandULM():
 if __name__ == "__main__":
     if IS_NOT_LINUX:
         # main_compareBPE()
-        main_compareULM()
+        # main_compareULM()
+        intrinsicsVersusTemperature_word("antidisestablishmentarianism", unconstrained=True)
     else:
         import argparse
         parser = argparse.ArgumentParser()
