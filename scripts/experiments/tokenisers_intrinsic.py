@@ -36,7 +36,7 @@ def pretokenIterableFromCorpus(line_iterable: NamedIterable[str]) -> NamedIterab
     return line_iterable.flatmap(pretoken_generator.do)
 
 
-def loadCorpusAsNamedIterable() -> NamedIterable[str]:
+def loadValidationCorpusAsNamedIterable() -> NamedIterable[str]:
     _, _, validation = loadCorpus(CORPUS_ID)
     return NamedIterable(validation, name=validation.info.dataset_name).map(lambda e: e["text"])
 
@@ -144,6 +144,8 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_sampl
                 self.l = BCF()
                 self.R = BCF()
 
+                self.max_coverage_uniqueness = BCF()
+                self.coverage           = BCF()
                 self.uniqueness         = BCF()
                 self.rr_versus_argmax   = BCF()  # Intuitively, this is always larger than uniqueness. Uniqueness measures for each segmentation if it is different from ALL segmentations so far. RR measures for each segmentation if it is different from one particular segmentation.
                 self.eff_all            = BCF()
@@ -188,7 +190,9 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_sampl
                             domain_size=domain_size,
                             sample_size=n_samples_per_pretoken
                         )
-                        tk_stats.uniqueness        .add(distributional_stats.uniqueness)
+                        tk_stats.max_coverage_uniqueness .add(distributional_stats.max_coverage_uniqueness)
+                        tk_stats.coverage                .add(distributional_stats.coverage)
+                        tk_stats.uniqueness              .add(distributional_stats.uniqueness)
                         tk_stats.eff_all           .add(distributional_stats.efficiency_all)
                         tk_stats.eff_without_argmax.add(distributional_stats.efficiency_no_argmax)
                         tk_stats.rr_versus_argmax  .add(distributional_stats.regularisation_rate_argmax)
@@ -239,8 +243,16 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_sampl
             table2.set(tk_stats.rr_versus_argmax.mean(), row, [col, col_mean])
             table2.set(tk_stats.rr_versus_argmax.std(),  row, [col, col_std])
 
-            # - Then uniqueness
-            col = "RR${}^*$"
+            # - Then uniqueness/coverage
+            col = "$\max(C,U)$"
+            table2.set(tk_stats.max_coverage_uniqueness.mean(), row, [col, col_mean])
+            table2.set(tk_stats.max_coverage_uniqueness.std(),  row, [col, col_std])
+
+            col = "$C$"
+            table2.set(tk_stats.coverage.mean(), row, [col, col_mean])
+            table2.set(tk_stats.coverage.std(),  row, [col, col_std])
+
+            col = "$U$"
             table2.set(tk_stats.uniqueness.mean(), row, [col, col_mean])
             table2.set(tk_stats.uniqueness.std(),  row, [col, col_std])
 
@@ -429,12 +441,14 @@ def main1():
     Generate table with inference metrics across the project corpus.
 
     37 minutes for 200x10 examples on my home i7.
-    We want to multiply that by at least 100... oh oh.
+
+    Say we want 100 samples per pretoken, then doing 2000 examples gets us to about (37/60) * (2000*100)/(200*10) = 62 hours.
+    Take 10 hours of margin to get 3 days.
     """
     intrinsicMetrics(
-        loadCorpusAsNamedIterable(),
-        n_examples=10 if IS_NOT_LINUX else 20_000,
-        n_samples_per_pretoken=10 if IS_NOT_LINUX else 50  # ---> TODO: This number should be high enough to get a solid entropy estimate. Going to be very slow lmao
+        loadValidationCorpusAsNamedIterable(),
+        n_examples=9 if IS_NOT_LINUX else 2_000,
+        n_samples_per_pretoken=10 if IS_NOT_LINUX else 100
     )
 
 
@@ -456,12 +470,43 @@ def main3():
     from tktkt.evaluation.fertility import getVocabStats
 
     deserialisers = [BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])]
-    pretokens = pretokenIterableFromCorpus(loadCorpusAsNamedIterable())
+    pretokens = pretokenIterableFromCorpus(loadValidationCorpusAsNamedIterable())
     for d in deserialisers:
         print(d.__class__.__name__)
         print("\t", getVocabStats(effective_preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary(),
                                   raw_words=pretokens,
                                   do_log_segmentations=True))
+
+
+def main4():
+    # Import tokenisers
+    from tktkt.models.identity.segmentation import IdentityTokeniser
+    from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
+    from tktkt.models.random.pathmarkov import GRaMPa
+
+    # Import vocab
+    from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
+    vocab = KudoPiece32ki_SlimPajama3M(specials=[])
+
+    # Test
+    slowdownGraph(
+        loadValidationCorpusAsNamedIterable(),
+        n_examples=1000 if IS_NOT_LINUX else 20_000,
+        tokenisers=[
+            IdentityTokeniser(
+                preprocessor=vocab.preprocessorEffective()
+            ),
+            GRaMPa(
+                preprocessor=vocab.preprocessorEffective(),
+                vocab=vocab.buildVocabulary(),
+                decode_backwards=False
+            ),
+            Cognetta(
+                preprocessor=vocab.preprocessorEffective(),
+                vocab=vocab.buildVocabulary()
+            )
+        ]
+    )
 
 
 if __name__ == "__main__":
@@ -506,27 +551,6 @@ if __name__ == "__main__":
     #     word=word,
     #     samples=100_000,
     #     segmentation_histogram_max_bins=2**9
-    # )
-
-    # from tktkt.models.random.pathmarkov import GRaMPa
-    # from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
-    # from tktkt.models.identity.segmentation import IdentityTokeniser
-    # from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
-    # vocab = KudoPiece32ki_SlimPajama3M(specials=[])
-    # slowdownGraph(
-    #     corpus,
-    #     N,
-    #     [
-    #         GRaMPa(
-    #             preprocessor=vocab.preprocessorEffective(),
-    #             vocab=vocab.buildVocabulary(),
-    #             decode_backwards=False
-    #         ),
-    #         Cognetta(
-    #             preprocessor=vocab.preprocessorEffective(),
-    #             vocab=vocab.buildVocabulary()
-    #         )
-    #     ]
     # )
 
     ################################
