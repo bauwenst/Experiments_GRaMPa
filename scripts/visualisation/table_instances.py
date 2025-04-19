@@ -7,7 +7,7 @@ from collections import OrderedDict
 import re
 
 from fiject import ColumnStyle
-from fiject.visuals.tables import SignMode
+from fiject.visuals.tables import SignMode, DeltaMode
 
 Number = Union[int,float]
 T = TypeVar("T")
@@ -353,7 +353,7 @@ EXTRA_STYLES = {
         do_bold_maximum=True,
         signs=SignMode.BOTH_INSIDE,
         digits=2,
-        alignment="|r",  # FIXME: The fact that I have to put | here means there is a bug in Fiject.
+        alignment="r",
         cell_prefix=r"\tgrad[-5.0][0.0][+5.0]{", cell_function=lambda d: 100*d, cell_suffix="}",
         cell_default_if_empty=r"\cellcolor{black!10}"
     ),
@@ -361,7 +361,7 @@ EXTRA_STYLES = {
         do_bold_maximum=True,
         signs=SignMode.MINUS_INSIDE_NO_PLUS,
         digits=2,
-        alignment="c",
+        alignment="|c",  # FIXME: The fact that I have to put | here means there is a bug in Fiject.
         cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda d: 100*d, cell_suffix="}",
         cell_default_if_empty=r"\cellcolor{black!10}"
     )
@@ -371,11 +371,11 @@ EXTRA_STYLES = {
 ########################################################################################################################
 
 
-def visualise_finetuning():
+def visualise_finetuning(relative: bool=False):
     wandb_export = PATH_DATA_OUT / "wandb-5.csv"
 
     parser = GRaMPaFinetuningParser(TASK_TO_METRICS_TO_SUBMETRICS, SUBMETRIC_TO_FORMATTED)
-    table = parser.toTable(wandb_export)
+    table = parser.toTable(wandb_export, stem_suffix="_deltas"*relative)
     table.commit(
         borders_between_columns_of_level=[0],
         borders_between_rows_of_level=[0, 1, 2],
@@ -383,7 +383,16 @@ def visualise_finetuning():
             do_bold_maximum=True,
             cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda x: 100*x, cell_suffix="}",
             digits=1,
-            cell_default_if_empty=r"\cellcolor{black!10}"),
+            cell_default_if_empty=r"\cellcolor{black!10}",
+        ) if not relative else ColumnStyle(
+            do_bold_maximum=True,
+            cell_prefix=r"\tgrad[-10][0][10]{", cell_function=lambda x: 100*x, cell_suffix="}",
+            digits=2,
+            cell_default_if_empty=r"\cellcolor{black!10}",
+
+            aggregate_at_rowlevel=0,
+            do_deltas=DeltaMode.RELATIVE_DIFFERENCE
+        ),
         alternate_column_styles=EXTRA_STYLES
     )
 
@@ -412,5 +421,5 @@ def visualise_typos():
 
 
 if __name__ == "__main__":
-    visualise_finetuning()
-    # visualise_typos()
+    visualise_finetuning(relative=False)
+    visualise_typos()

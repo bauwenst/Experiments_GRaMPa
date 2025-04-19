@@ -444,6 +444,8 @@ def main1():
 
     Say we want 100 samples per pretoken, then doing 2000 examples gets us to about (37/60) * (2000*100)/(200*10) = 62 hours.
     Take 10 hours of margin to get 3 days.
+
+    TODO: Note that you want 20k for table 1 but 2k for table 2.
     """
     intrinsicMetrics(
         loadValidationCorpusAsNamedIterable(),
