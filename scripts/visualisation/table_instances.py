@@ -361,7 +361,7 @@ EXTRA_STYLES = {
         do_bold_maximum=True,
         signs=SignMode.MINUS_INSIDE_NO_PLUS,
         digits=2,
-        alignment="|c",  # FIXME: The fact that I have to put | here means there is a bug in Fiject.
+        alignment="c",
         cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda d: 100*d, cell_suffix="}",
         cell_default_if_empty=r"\cellcolor{black!10}"
     )
@@ -376,6 +376,23 @@ def visualise_finetuning(relative: bool=False):
 
     parser = GRaMPaFinetuningParser(TASK_TO_METRICS_TO_SUBMETRICS, SUBMETRIC_TO_FORMATTED)
     table = parser.toTable(wandb_export, stem_suffix="_deltas"*relative)
+    commit(table, relative)
+
+
+def visualise_typos(relative: bool=False):
+    wandb_export = PATH_DATA_OUT / "wandb-5.csv"
+
+    parser = GRaMPaTypoParser({
+        "dp": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
+        "dp+typosld1(train)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
+        "dp+typosld1(validation,test)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
+        "dp+typosld1(train,validation,test)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
+    }, SUBMETRIC_TO_FORMATTED)
+    table = parser.toTable(wandb_export, stem_suffix="_typos" + "_deltas"*relative)
+    commit(table, relative)
+
+
+def commit(table: Table, relative_style: bool):
     table.commit(
         borders_between_columns_of_level=[0],
         borders_between_rows_of_level=[0, 1, 2],
@@ -384,7 +401,7 @@ def visualise_finetuning(relative: bool=False):
             cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda x: 100*x, cell_suffix="}",
             digits=1,
             cell_default_if_empty=r"\cellcolor{black!10}",
-        ) if not relative else ColumnStyle(
+        ) if not relative_style else ColumnStyle(
             do_bold_maximum=True,
             cell_prefix=r"\tgrad[-10][0][10]{", cell_function=lambda x: 100*x, cell_suffix="}",
             digits=2,
@@ -397,29 +414,6 @@ def visualise_finetuning(relative: bool=False):
     )
 
 
-def visualise_typos():
-    wandb_export = PATH_DATA_OUT / "wandb-5.csv"
-
-    parser = GRaMPaTypoParser({
-        "dp": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
-        "dp+typosld1(train)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
-        "dp+typosld1(validation,test)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
-        "dp+typosld1(train,validation,test)": TASK_TO_METRICS_TO_SUBMETRICS["dp"],
-    }, SUBMETRIC_TO_FORMATTED)
-    table = parser.toTable(wandb_export, stem_suffix="_typos")
-    table.commit(
-        borders_between_columns_of_level=[0],
-        borders_between_rows_of_level=[0, 1, 2],
-        default_column_style=ColumnStyle(
-            do_bold_maximum=True,
-            cell_prefix=r"\tgrad[0][50][100]{", cell_function=lambda x: 100*x, cell_suffix="}",
-            digits=1,
-            cell_default_if_empty=r"\cellcolor{black!10}"
-        ),
-        alternate_column_styles=EXTRA_STYLES
-    )
-
-
 if __name__ == "__main__":
-    visualise_finetuning(relative=False)
-    visualise_typos()
+    # visualise_finetuning(relative=True)
+    visualise_typos(relative=True)
