@@ -5,18 +5,20 @@ from scripts.preamble import *
 from scripts.experiments.lineages import *
 from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Iterator, Set
 import numpy as np
 
 from tktkt.evaluation.entropy import renyiEfficiency, getTokenDistributionFromSentences_and_analyse
 from tktkt.evaluation.compare import ExactMatches
+from tktkt.evaluation.fertility import countValidSegmentations
+from tktkt.interfaces import Deserialiser
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships, visualiseSingleWordSegmentationDistribution
 from tktkt.models.random.pathmarkov import PowerNormalisation, GRaMPa
 from tktkt.models.kudopiece.segmentation import KudoPieceTokeniser
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.factories.preprocessing import TraditionalPreprocessor
 from tktkt.factories.tokenisers import Factory_GRaMPa
-from tktkt.util.types import NamedIterable
+from tktkt.util.types import NamedIterable, T
 from tktkt.util.printing import wprint
 from tktkt.util.environment import IS_NOT_LINUX
 from tktkt.util.iterables import streamProgress
@@ -29,6 +31,44 @@ rc("text.latex", preamble=r"\DeclareUnicodeCharacter{2581}{\_}")
 LOW_KEY  = r"$H_\alpha/\lceil H_0\rceil$"
 MID_KEY  = r"$H_\alpha/H_0$"
 HIGH_KEY = r"$\lceil H_\alpha \rceil/H_0$"
+
+
+
+class OrderedSet(Iterable[T]):
+    def __init__(self, iterable: Iterable[T]):
+        self._index_to_elements = []
+        self._elements = set()  # If you want an O(1) .index() method (but more expensive tail/head), make this a dictionary.
+        for thing in iterable:
+            self.add(thing)
+
+    def index(self, value: T) -> int:
+        return self._index_to_elements.index(value)  # This is slow, but you can't speed it up without a dictionary.
+
+    def __len__(self) -> int:
+        return len(self._index_to_elements)
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self._index_to_elements)
+
+    def add(self, thing: T):
+        if thing not in self._elements:
+            self._elements.add(thing)
+            self._index_to_elements.append(thing)
+
+    def headSet(self, n: int) -> Set[T]:
+        """Returns the first n unique elements that were added to the set.
+           Implemented such as to minimise the amount of re-hashing to be done."""
+        if n < len(self) // 2:  # You're asking for a couple elements at the start. So, re-hash those n.
+            return set(self._index_to_elements[:n])
+        else:  # In this case, it's wasteful to re-hash the majority of elements. Reuse the existing hashes and only re-hash what you want to remove.
+            return self._elements - set(self._index_to_elements[n:])
+
+    def tailSet(self, n: int) -> Set[T]:
+        """Returns the last n unique elements that were added to the set. Similarly efficient to headSet()."""
+        if n < len(self) // 2:
+            return set(self._index_to_elements[-n:])
+        else:
+            return self._elements - set(self._index_to_elements[:-n])
 
 
 def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
@@ -339,6 +379,7 @@ def intrinsicsVersusTemperature_corpus(tk: GRaMPa, word: str, corpus: NamedItera
 
 
 def main_vocabsize(corpus: NamedIterable[str]):
+    from math import log2
     from fiject import LineGraph
     from scripts.experiments.lineages import bpe_vocab, kudo_vocab_new
 
@@ -357,36 +398,49 @@ def main_vocabsize(corpus: NamedIterable[str]):
         def compute(self):
             return self.n / self.d if self.d != 0 else 0
 
-    g = LineGraph(f"vocabsize-vs-fertility_{STEP}", caching=CacheMode.IF_MISSING)
-    if g.needs_computation:
+    g_paper = LineGraph(f"vocabsize-vs-fertility_paper_{STEP}", caching=CacheMode.IF_MISSING)
+    g_max   = LineGraph(f"vocabsize-vs-fertility_max_{STEP}", caching=CacheMode.IF_MISSING)
+    if g_paper.needs_computation or g_max.needs_computation:
         for vocab, name in [(bpe_vocab, "BPE"), (kudo_vocab_new, "ULM")]:
-            # TODO: List vocabulary in reverse order so it can be truncated
+            vocab: Deserialiser
+            preprocessor = vocab.preprocessorEffective()
+            vocab_as_dict = vocab.buildVocabulary()
+            ordered_vocab = OrderedSet(sorted(vocab_as_dict.keys(), key=vocab_as_dict.get))
 
             sizes = range(len(ordered_vocab), STEP-1, -STEP)
-            results_by_size = {s: MicroAverage() for s in sizes}
+            sex_vs_paper = {s: MicroAverage() for s in sizes}  # "sex" is short for "seGmentationS"
+            sex_vs_max   = {s: MicroAverage() for s in sizes}
             for word in corpus:
-                # TODO: We actually want a custom implementation of getVocabStats() that compares the current amount of
-                #       segmentations to the vocabulary size we CHOSE for the paper, not to a full vocabulary. (That too,
-                #       but in a different graph.)
-                # stats = getVocabStats(
-                #     effective_preprocessor=vocab.preprocessorEffective(),
-                #     vocab=vocab.buildVocabulary(),
-                #     raw_words=corpus,
-                #     logarithmic_segmentations=True
-                # )
-                pretokens = vocab.preprocessorEffective().do(word)
-                n_segs_paper = ...
-                n_segs_max   = ...
+                pretokens = preprocessor.do(word)
+                n_chars   = sum(map(len, pretokens))
+
+                n_sex_paper = None
+                n_sex_max   = n_chars - len(pretokens)
                 for tau in sizes:
-                    truncated_vocab = ...
-                    n_segs = ...
+                    truncated_vocab = ordered_vocab.headSet(tau)
 
-                    results_by_size[tau].add(..., ...)
+                    n_sex = 1
+                    for pretoken in pretokens:
+                        n_sex *= countValidSegmentations(pretoken, truncated_vocab)
+                    n_sex = log2(n_sex)
+                    if n_sex_paper is None:
+                        n_sex_paper = n_sex
 
-            for tau in sizes:
-                g.add(series_name=name, x=tau, y=results_by_size[tau].compute())
+                    sex_vs_paper[tau].add(n_sex, n_sex_paper)
+                    sex_vs_max[tau].add(n_sex, n_sex_max)
 
-    g.commit(...)
+            for tau in sorted(sizes):
+                g_paper.add(series_name=name, x=tau, y=sex_vs_paper[tau].compute())
+                g_max.add(series_name=name, x=tau, y=sex_vs_paper[tau].compute())
+
+    g_paper.commitWithArgs(LineGraph.ArgsGlobal(
+        x_label="Truncated vocabulary size $|V'|$",
+        y_label=r"Fraction of segmentations $\mathbb{E}_s[\log_2(N_{V'}(s))/\log_2(N_V(s))]$"
+    ), LineGraph.ArgsPerLine())
+    g_max.commitWithArgs(LineGraph.ArgsGlobal(
+        x_label="Truncated vocabulary size $|V'|$",
+        y_label=r"Fraction of segmentations $\mathbb{E}_s[\log_2(N_{V'}(s))/\log_2(N_{V_\text{full}}(s))]$"
+    ), LineGraph.ArgsPerLine())
 
 
 def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
