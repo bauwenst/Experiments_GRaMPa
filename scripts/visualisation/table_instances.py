@@ -1,13 +1,14 @@
 from scripts.preamble import *
 
 from enum import Enum
-from typing import Tuple, Union, TypeVar, Dict, Set
+from typing import Tuple, Union, TypeVar, Dict, Optional
 from collections import OrderedDict
 
 import re
 
 from fiject import ColumnStyle
 from fiject.visuals.tables import SignMode, DeltaMode
+from fiject.applications.autotable import *
 
 Number = Union[int,float]
 T = TypeVar("T")
@@ -118,7 +119,6 @@ def formatTaskName(task: str) -> str:
 ########################################################################################################################
 
 
-from scripts.visualisation.table_abstract import *
 from dataclasses import dataclass
 
 @dataclass
@@ -142,7 +142,7 @@ class GRaMPaColumnKey:
         return hash(self.task) + hash(self.metric) + hash(self.submetric)
 
 
-class GRaMPaFinetuningParser(CsvParser[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int, int, int, float], Tuple[int, int, int]]):
+class GRaMPaFinetuningParser(AutoTableFromCsv[GRaMPaRowKey, GRaMPaColumnKey, Tuple[int, int, int, float], Tuple[int, int, int]]):
     """
     Parses W&B CSV export for the finetuning runs.
 

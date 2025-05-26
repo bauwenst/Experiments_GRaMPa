@@ -8,7 +8,7 @@ from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 from typing import Iterable, Tuple
 import numpy as np
 
-from tktkt.evaluation.entropy import renyiEfficiency, tokenDistributionFromSentences
+from tktkt.evaluation.entropy import renyiEfficiency, getTokenDistributionFromSentences_and_analyse
 from tktkt.evaluation.compare import ExactMatches
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships, visualiseSingleWordSegmentationDistribution
 from tktkt.models.random.pathmarkov import PowerNormalisation, GRaMPa
@@ -41,7 +41,7 @@ def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], tem
             wprint(f"Now testing temperature t={t}...")
             normaliser.resetTemperature(t)
 
-            unigram_distribution = tokenDistributionFromSentences(markov_tokeniser, corpus)
+            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(markov_tokeniser, corpus)
             low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
             wprint(low, mid, high)
 
@@ -68,7 +68,7 @@ def searchMultiplexP(multiplex_tokeniser: StochasticTokeniserSwitch, corpus: Nam
             wprint(f"Now testing with {multiplex_tokeniser.subtokenisers[1].getName()} at p={p}...")
             multiplex_tokeniser.threshold = p
 
-            unigram_distribution = tokenDistributionFromSentences(multiplex_tokeniser, corpus)
+            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(multiplex_tokeniser, corpus)
             low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
             wprint(low, mid, high)
 
@@ -97,7 +97,7 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
             wprint(f"Now testing alpha a={a}...")
             kudo_tokeniser._alpha = a
 
-            unigram_distribution = tokenDistributionFromSentences(kudo_tokeniser, corpus)
+            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(kudo_tokeniser, corpus)
             low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
             wprint(low, mid, high)
 
@@ -127,7 +127,7 @@ def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> 
             wprint(f"Now testing dropout p={p}...")
             tk = Factory_BPE(dropout=p).buildTokeniser()
 
-            unigram_distribution = tokenDistributionFromSentences(tk, corpus)
+            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(tk, corpus)
             low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
             wprint(low, mid, high)
 
@@ -336,6 +336,57 @@ def intrinsicsVersusTemperature_corpus(tk: GRaMPa, word: str, corpus: NamedItera
         y_label="Examples in corpus",
         relative_counts=True
     ))
+
+
+def main_vocabsize(corpus: NamedIterable[str]):
+    from fiject import LineGraph
+    from scripts.experiments.lineages import bpe_vocab, kudo_vocab_new
+
+    STEP = 2048
+
+    class MicroAverage:
+
+        def __init__(self):
+            self.n = 0
+            self.d = 0
+
+        def add(self, n: float, d: float):
+            self.n += n
+            self.d += d
+
+        def compute(self):
+            return self.n / self.d if self.d != 0 else 0
+
+    g = LineGraph(f"vocabsize-vs-fertility_{STEP}", caching=CacheMode.IF_MISSING)
+    if g.needs_computation:
+        for vocab, name in [(bpe_vocab, "BPE"), (kudo_vocab_new, "ULM")]:
+            # TODO: List vocabulary in reverse order so it can be truncated
+
+            sizes = range(len(ordered_vocab), STEP-1, -STEP)
+            results_by_size = {s: MicroAverage() for s in sizes}
+            for word in corpus:
+                # TODO: We actually want a custom implementation of getVocabStats() that compares the current amount of
+                #       segmentations to the vocabulary size we CHOSE for the paper, not to a full vocabulary. (That too,
+                #       but in a different graph.)
+                # stats = getVocabStats(
+                #     effective_preprocessor=vocab.preprocessorEffective(),
+                #     vocab=vocab.buildVocabulary(),
+                #     raw_words=corpus,
+                #     logarithmic_segmentations=True
+                # )
+                pretokens = vocab.preprocessorEffective().do(word)
+                n_segs_paper = ...
+                n_segs_max   = ...
+                for tau in sizes:
+                    truncated_vocab = ...
+                    n_segs = ...
+
+                    results_by_size[tau].add(..., ...)
+
+            for tau in sizes:
+                g.add(series_name=name, x=tau, y=results_by_size[tau].compute())
+
+    g.commit(...)
 
 
 def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):

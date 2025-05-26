@@ -5,7 +5,6 @@ WITHOUT changing any hyperparameters.
 from scripts.preamble import *
 from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
 from scripts.experiments.lineages import getTokeniserFactories
-from scripts.visualisation.table_abstract import SortableRowKeys, FormattedKeys
 from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
 
 import time
@@ -29,6 +28,7 @@ from tktkt.util.iterables import take, streamProgress
 
 from fiject import Table, CacheMode, ColumnStyle, MultiHistogram, FIJECT_DEFAULTS, \
     StreamingVariableGranularityHistogram, BinSpec, BinOverlapMode, VariableGranularityHistogram, StreamingStochasticLineGraph
+from fiject.applications.autotable import SortableRowKeys, FormattedKeys
 
 pretoken_generator = Preprocessor(TruncateAndNormalise(1_000_000), IdentityMapper(), TraditionalPretokeniser())
 def pretokenIterableFromCorpus(line_iterable: NamedIterable[str]) -> NamedIterable[str]:
@@ -477,7 +477,7 @@ def main3():
         print(d.__class__.__name__)
         print("\t", getVocabStats(effective_preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary(),
                                   raw_words=pretokens,
-                                  do_log_segmentations=True))
+                                  logarithmic_segmentations=True))
 
 
 def main4():
