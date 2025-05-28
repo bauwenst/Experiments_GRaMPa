@@ -7,6 +7,7 @@ from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 
 from typing import Iterable, Tuple, Iterator, Set
 import numpy as np
+from math import log2
 
 from tktkt.evaluation.entropy import renyiEfficiency, getTokenDistributionFromSentences_and_analyse
 from tktkt.evaluation.compare import ExactMatches
@@ -71,10 +72,29 @@ class OrderedSet(Iterable[T]):
             return self._elements - set(self._index_to_elements[:-n])
 
 
+class MicroAverage:
+
+    def __init__(self):
+        self.n = 0
+        self.d = 0
+
+    def add(self, n: float, d: float):
+        self.n += n
+        self.d += d
+
+    def compute(self):
+        return self.n / self.d if self.d != 0 else 0
+
+
+
+################################################################################################
+
+
+
 def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
     normaliser = markov_tokeniser.renormalisation
     assert isinstance(normaliser, PowerNormalisation)
-    normaliser.resetTemperature(0)
+    normaliser.resetTemperature(float("inf"))  # Only so the name doesn't have any particular number in it.
     g = LineGraph(f"renyi_t_{markov_tokeniser.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
     if g.needs_computation:
         for t in temperature_grid:
@@ -131,8 +151,9 @@ def searchMultiplexP(multiplex_tokeniser: StochasticTokeniserSwitch, corpus: Nam
 
 def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[str], alpha_grid: Iterable[float]) -> Tuple[float,float]:
     kudo_tokeniser._alpha = "a"  # Trick to get the name independent.
-    g = LineGraph(f"renyi_α_{kudo_tokeniser.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
+    g = LineGraph(f"renyi_α_{kudo_tokeniser.getName()}_{corpus.name}", caching=CacheMode.IF_MISSING)
     if g.needs_computation:
+        print("Computing", g.name)
         for a in alpha_grid:
             wprint(f"Now testing alpha a={a}...")
             kudo_tokeniser._alpha = a
@@ -146,9 +167,10 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
             g.add(HIGH_KEY, a, high)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
-        # y_lims=(0.35,0.65),
+        y_lims=(0.2,0.5),
         x_label=r"ULM normalisation power $\alpha$",
         x_tickspacing=0.1,
+        y_tickspacing=0.05,
         y_label="Rényi efficiency bounds",
         legend_position="lower right"
     ), LineGraph.ArgsPerLine())
@@ -161,7 +183,7 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
 def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> Tuple[float,float]:
     tk = Factory_BPE(dropout=0).buildTokeniser()
     tk._dropout_as_string = "p"
-    g = LineGraph(f"renyi_dropout_{tk.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
+    g = LineGraph(f"renyi_dropout_{tk.getName()}_{corpus.name}", caching=CacheMode.IF_MISSING)
     if g.needs_computation:
         for p in dropout_grid:
             wprint(f"Now testing dropout p={p}...")
@@ -176,11 +198,12 @@ def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> 
             g.add(HIGH_KEY, p, high)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
-        # y_lims=(0.35,0.65),
-        x_label=r"BPE dropout probability $p$",
+        y_lims=(0.2,0.5),
+        x_label=r"BPE dropout probability $p_d$",
         x_tickspacing=0.1,
+        y_tickspacing=0.05,
         y_label="Rényi efficiency bounds",
-        legend_position="lower right"
+        legend_position="lower left"
     ), LineGraph.ArgsPerLine())
 
     dropouts, lows = g.data[LOW_KEY]
@@ -226,16 +249,16 @@ def main_dropout():
     ))
 
 
-def main_temperature(bpe_not_ulm: bool):
+def main_temperature(bpe_not_ulm: bool, minlen: int):
     """
     This experiment turns out to be inconclusive at best and pointing to a lower RE for higher temperature at worst,
     which makes a lot of sense since you are decreasing segmentation entropy. You can't fine-tune temperature with RE.
     """
     # Get tokeniser
     if bpe_not_ulm:
-        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, l_min=2).buildTokeniser()
+        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, l_min=minlen).buildTokeniser()
     else:
-        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l_min=2).buildTokeniser()
+        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, l_min=minlen).buildTokeniser()
     grampa = switch.subtokenisers[1]
     assert isinstance(grampa, GRaMPa)
 
@@ -378,77 +401,73 @@ def intrinsicsVersusTemperature_corpus(tk: GRaMPa, word: str, corpus: NamedItera
     ))
 
 
-def main_vocabsize(corpus: NamedIterable[str]):
-    from math import log2
-    from fiject import LineGraph
-    from scripts.experiments.lineages import bpe_vocab, kudo_vocab_new
-
+def main_vocabsize():
     STEP = 2048
+    split_into_words = TraditionalPreprocessor()
+    corpus_of_words = getValidationCorpus().flatmap(split_into_words.do)
 
-    class MicroAverage:
-
-        def __init__(self):
-            self.n = 0
-            self.d = 0
-
-        def add(self, n: float, d: float):
-            self.n += n
-            self.d += d
-
-        def compute(self):
-            return self.n / self.d if self.d != 0 else 0
-
-    g_paper = LineGraph(f"vocabsize-vs-fertility_paper_{STEP}", caching=CacheMode.IF_MISSING)
-    g_max   = LineGraph(f"vocabsize-vs-fertility_max_{STEP}", caching=CacheMode.IF_MISSING)
+    g_paper = LineGraph(f"vocabsize-vs-fertility_paper_{corpus_of_words.name}-{STEP}", caching=CacheMode.IF_MISSING)
+    g_max   = LineGraph(f"vocabsize-vs-fertility_max_{corpus_of_words.name}-{STEP}", caching=CacheMode.IF_MISSING)
     if g_paper.needs_computation or g_max.needs_computation:
         for vocab, name in [(bpe_vocab, "BPE"), (kudo_vocab_new, "ULM")]:
             vocab: Deserialiser
             preprocessor = vocab.preprocessorEffective()
             vocab_as_dict = vocab.buildVocabulary()
-            ordered_vocab = OrderedSet(sorted(vocab_as_dict.keys(), key=vocab_as_dict.get))
+            ordered_vocab = OrderedSet(sorted(vocab_as_dict, key=lambda t: (len(t) != 1, vocab_as_dict[t]) ))  # For the alphabet, you get something of the form (False, ...) which is sorted before any (True, ...).
 
             sizes = range(len(ordered_vocab), STEP-1, -STEP)
+            print("Vocab sizes:", list(sizes))
+            vocabularies = {s: ordered_vocab.headSet(s) for s in sizes}
+
             sex_vs_paper = {s: MicroAverage() for s in sizes}  # "sex" is short for "seGmentationS"
             sex_vs_max   = {s: MicroAverage() for s in sizes}
-            for word in corpus:
+            for word in corpus_of_words:
                 pretokens = preprocessor.do(word)
                 n_chars   = sum(map(len, pretokens))
 
                 n_sex_paper = None
                 n_sex_max   = n_chars - len(pretokens)
                 for tau in sizes:
-                    truncated_vocab = ordered_vocab.headSet(tau)
+                    # truncated_vocab = ordered_vocab.headSet(tau)
+                    truncated_vocab = vocabularies[tau]
 
+                    # Get log2(N_V(s))
                     n_sex = 1
                     for pretoken in pretokens:
                         n_sex *= countValidSegmentations(pretoken, truncated_vocab)
+                    if n_sex == 0:  # TODO: The KudoPiece vocab is in the back, omfg
+                        # print("One of these pretokens could not be tokenised:", pretokens)
+                        n_sex = 1
                     n_sex = log2(n_sex)
+
+                    # Record the result versus the baselines
                     if n_sex_paper is None:
                         n_sex_paper = n_sex
-
                     sex_vs_paper[tau].add(n_sex, n_sex_paper)
                     sex_vs_max[tau].add(n_sex, n_sex_max)
 
             for tau in sorted(sizes):
                 g_paper.add(series_name=name, x=tau, y=sex_vs_paper[tau].compute())
-                g_max.add(series_name=name, x=tau, y=sex_vs_paper[tau].compute())
+                g_max.add(series_name=name, x=tau, y=sex_vs_max[tau].compute())
 
     g_paper.commitWithArgs(LineGraph.ArgsGlobal(
         x_label="Truncated vocabulary size $|V'|$",
-        y_label=r"Fraction of segmentations $\mathbb{E}_s[\log_2(N_{V'}(s))/\log_2(N_V(s))]$"
+        y_label=r"Fraction of segmentations $\log_2(N_{V'}(s))/\log_2(N_V(s))$",
+        y_lims=(0.575,1.025)
     ), LineGraph.ArgsPerLine())
     g_max.commitWithArgs(LineGraph.ArgsGlobal(
         x_label="Truncated vocabulary size $|V'|$",
-        y_label=r"Fraction of segmentations $\mathbb{E}_s[\log_2(N_{V'}(s))/\log_2(N_{V_\text{full}}(s))]$"
+        y_label=r"Fraction of segmentations $\log_2(N_{V'}(s))/\log_2(N_{V_\textrm{full}}(s))$",
+        y_lims=(0.575,1.025)
     ), LineGraph.ArgsPerLine())
 
 
-def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0):
+def main_multiplex(bpe_not_ulm: bool, temperature: float=1.0, minlen: int=1):
     # Get tokeniser
     if bpe_not_ulm:
-        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, temperature=temperature, l_min=2).buildTokeniser()
+        switch = Factory_SwitchyGrampa_BPE(dropout=0.0, temperature=temperature, l_min=minlen).buildTokeniser()
     else:
-        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, temperature=temperature, l_min=2).buildTokeniser()
+        switch = Factory_SwitchyGrampa_ULM(kbest=1, smoothing_power=1.0, temperature=temperature, l_min=minlen).buildTokeniser()
 
     # Get corpus
     _, _, validation_corpus = loadCorpus(CORPUS_ID)
@@ -471,8 +490,7 @@ def main_compareBPE():
     g = LineGraph("diffrate_BPE", caching=CacheMode.WRITE_ONLY)
 
     # Get corpus
-    _, _, validation_corpus = loadCorpus(CORPUS_ID)
-    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+    iterable = getValidationCorpus()
 
     # Get metric
     metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
@@ -532,12 +550,16 @@ def main_compareULM():
     )
 
 
+def getValidationCorpus() -> NamedIterable[str]:
+    _, _, validation_corpus = loadCorpus(CORPUS_ID)
+    return NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).tqdm().map(lambda example: example["text"])
+
+
 def main_compareChosenBPEandULM():
     from scripts.constants import BPEDROPOUT_P, ULM_K, ULM_ALPHA
 
     # Get corpus
-    _, _, validation_corpus = loadCorpus(CORPUS_ID, validation_size=1000)
-    iterable = NamedIterable(validation_corpus, name=validation_corpus.info.dataset_name).map(lambda example: example["text"])
+    iterable = getValidationCorpus()
 
     # Get metric
     metric = ExactMatches(texts=iterable, n_repeats=3, global_preprocessor=TraditionalPreprocessor())
@@ -563,7 +585,12 @@ if __name__ == "__main__":
     if IS_NOT_LINUX:
         # main_compareBPE()
         # main_compareULM()
-        intrinsicsVersusTemperature_word("antidisestablishmentarianism", unconstrained=True)
+        # intrinsicsVersusTemperature_word("antidisestablishmentarianism", unconstrained=True)
+        # main_vocabsize()
+        # main_dropout()
+        # main_alphas()
+        main_temperature(bpe_not_ulm=True, minlen=1)
+        main_temperature(bpe_not_ulm=False, minlen=1)
     else:
         import argparse
         parser = argparse.ArgumentParser()
@@ -575,12 +602,13 @@ if __name__ == "__main__":
         # Arguments that only hold for multiplexing
         parser.add_argument("--bpe_vocab", default=False, action="store_true")
         parser.add_argument("--fixed_temp", default=1.0, type=float)
+        parser.add_argument("--fixed_minlen", default=2.0, type=float)
 
         args = parser.parse_args()
         if args.experiment_multiplex:
-            main_multiplex(bpe_not_ulm=args.bpe_vocab, temperature=args.fixed_temp)
+            main_multiplex(bpe_not_ulm=args.bpe_vocab, temperature=args.fixed_temp, minlen=args.fixed_minlen)
         elif args.experiment_temperature:
-            main_temperature(bpe_not_ulm=args.bpe_vocab)
+            main_temperature(bpe_not_ulm=args.bpe_vocab, minlen=args.fixed_minlen)
         elif args.experiment_alpha:
             main_alphas()
         elif args.experiment_dropout:
