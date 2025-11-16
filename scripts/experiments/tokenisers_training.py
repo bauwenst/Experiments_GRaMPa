@@ -13,7 +13,7 @@ from tktkt.util.environment import IS_NOT_LINUX
 
 TRUNCATE_INPUT_AFTER = 8192
 
-if IS_NOT_LINUX:
+if False:
     TRAINING_CORPUS_SIZE = 5000
     # VALIDATION_CORPUS_SIZE = 500
     # CORPUS_ID = ("oscar-corpus/oscar", "unshuffled_deduplicated_en")  # Has no validation split

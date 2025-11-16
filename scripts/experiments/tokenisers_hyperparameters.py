@@ -95,7 +95,7 @@ def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], tem
     normaliser = markov_tokeniser.renormalisation
     assert isinstance(normaliser, PowerNormalisation)
     normaliser.resetTemperature(float("inf"))  # Only so the name doesn't have any particular number in it.
-    g = LineGraph(f"renyi_t_{markov_tokeniser.getName()}_{corpus.name}", caching=CacheMode.WRITE_ONLY)
+    g = LineGraph(f"renyi_t_{markov_tokeniser.getName()}_{corpus.name}", caching=CacheMode.IF_MISSING)
     if g.needs_computation:
         for t in temperature_grid:
             wprint(f"Now testing temperature t={t}...")
@@ -110,7 +110,9 @@ def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], tem
             g.add(HIGH_KEY, t, high)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
-        y_lims=(0.30,0.60),
+        y_lims=(0.25,0.35) if "bpe" in g.name else (0.20, 0.30),
+        x_tickspacing=0.1,
+        y_tickspacing=0.01,
         x_label=r"Temperature $\tau$",
         y_label="Rényi efficiency bounds",
         legend_position="lower right"
@@ -274,7 +276,7 @@ def main_temperature(bpe_not_ulm: bool, minlen: int):
     # Call search
     print("Best temperature and its efficiency:", searchTemperatures(
         grampa,
-        NamedIterable(validation_corpus, name=("bpe" if bpe_not_ulm else "kudo") + "_" + validation_corpus.info.dataset_name).map(lambda example: example["text"]),
+        NamedIterable(validation_corpus, name=("bpe" if bpe_not_ulm else "kudo") + "_" + validation_corpus.info.dataset_name).map(lambda example: example["text"]).tqdm(),
         temperature_grid=temperatures
     ))
 
@@ -589,7 +591,7 @@ if __name__ == "__main__":
         # main_vocabsize()
         # main_dropout()
         # main_alphas()
-        main_temperature(bpe_not_ulm=True, minlen=1)
+        # main_temperature(bpe_not_ulm=True, minlen=1)
         main_temperature(bpe_not_ulm=False, minlen=1)
     else:
         import argparse

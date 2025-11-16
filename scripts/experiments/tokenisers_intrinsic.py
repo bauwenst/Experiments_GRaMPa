@@ -469,22 +469,41 @@ def main3():
     For each of the vocabularies, generate hypothetical vocabulary fertility stats across the project corpus.
     """
     from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
-    from tktkt.evaluation.fertility import getVocabStats
+    from tktkt.evaluation.fertility import PossibleSegmentations
+    from tktkt.evaluation.observing import ObservableIterable, DataclassObserver
 
     deserialisers = [BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])]
     pretokens = pretokenIterableFromCorpus(loadValidationCorpusAsNamedIterable())
+    results = DataclassObserver()
+
     for d in deserialisers:
-        print(d.__class__.__name__)
-        print("\t", getVocabStats(effective_preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary(),
-                                  raw_words=pretokens,
-                                  logarithmic_segmentations=True))
+        name = d.__class__.__name__
+        results.addMetadata(name)
+        print(name)
+        experiment = ObservableIterable(
+            experiment_id=name,
+            iterable=pretokens,
+            observers=[
+                PossibleSegmentations(
+                    effective_preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary(),
+                    do_logarithmic_segmentations=True,
+                    observers=[
+                        results
+                    ]
+                )
+            ]
+        )
+        experiment.run()
+        results.fence()
+
+    print("\t", results.assemble())
 
 
 def main4():
     # Import tokenisers
-    from tktkt.models.identity.segmentation import IdentityTokeniser
+    from tktkt.models.word.segmentation import IdentityTokeniser
     from tktkt.models.random.rejectionsampling import RandomVocabSegmentation_RejectionSampling_UniformGraph as Cognetta
-    from tktkt.models.random.pathmarkov import GRaMPa
+    from tktkt.models.random.grampa import GRaMPa
 
     # Import vocab
     from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
