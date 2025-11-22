@@ -9,12 +9,14 @@ from typing import Iterable, Tuple, Iterator, Set
 import numpy as np
 from math import log2
 
-from tktkt.evaluation.entropy import renyiEfficiency, getTokenDistributionFromSentences_and_analyse
+from tktkt.factories.evaluation import evaluateTokeniser
+from tktkt.evaluation.observing import FutureObserver
+from tktkt.evaluation.entropy import TokenUnigramDistribution, ReturnRenyiEfficiencyWithBounds, RenyiEfficiencyWithBounds
 from tktkt.evaluation.compare import ExactMatches
 from tktkt.evaluation.fertility import countValidSegmentations
 from tktkt.interfaces import Deserialiser
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships, visualiseSingleWordSegmentationDistribution
-from tktkt.models.random.pathmarkov import PowerNormalisation, GRaMPa
+from tktkt.models.random.grampa import PowerNormalisation, GRaMPa
 from tktkt.models.kudopiece.segmentation import KudoPieceTokeniser
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.factories.preprocessing import TraditionalPreprocessor
@@ -90,6 +92,27 @@ class MicroAverage:
 ################################################################################################
 
 
+def getRenyiEfficiency(id: str, corpus: NamedIterable[str], tokeniser: TokeniserWithFiniteTypeDomain) -> ReturnRenyiEfficiencyWithBounds:
+    future = FutureObserver()
+    evaluateTokeniser(
+        experiment_id=id,
+        corpus=corpus,
+        tokeniser=tokeniser,
+        token_consumers=[
+            TokenUnigramDistribution(
+                observers=[
+                    RenyiEfficiencyWithBounds(
+                        alpha=2.5,
+                        observers=[
+                            future
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+    return future.resolve()
+
 
 def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], temperature_grid: Iterable[float]) -> Tuple[float,float]:
     normaliser = markov_tokeniser.renormalisation
@@ -101,13 +124,12 @@ def searchTemperatures(markov_tokeniser: GRaMPa, corpus: NamedIterable[str], tem
             wprint(f"Now testing temperature t={t}...")
             normaliser.resetTemperature(t)
 
-            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(markov_tokeniser, corpus)
-            low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
-            wprint(low, mid, high)
+            renyi = getRenyiEfficiency(f"renyi_t={t}_{markov_tokeniser.getName()}_{corpus.name}", corpus, markov_tokeniser)
+            wprint(renyi)
 
-            g.add(LOW_KEY,  t, low)
-            g.add(MID_KEY,  t, mid)
-            g.add(HIGH_KEY, t, high)
+            g.add(LOW_KEY,  t, renyi.efficiency_lower)
+            g.add(MID_KEY,  t, renyi.efficiency_middle)
+            g.add(HIGH_KEY, t, renyi.efficiency_upper)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
         y_lims=(0.25,0.35) if "bpe" in g.name else (0.20, 0.30),
@@ -130,13 +152,12 @@ def searchMultiplexP(multiplex_tokeniser: StochasticTokeniserSwitch, corpus: Nam
             wprint(f"Now testing with {multiplex_tokeniser.subtokenisers[1].getName()} at p={p}...")
             multiplex_tokeniser.threshold = p
 
-            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(multiplex_tokeniser, corpus)
-            low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
-            wprint(low, mid, high)
+            renyi = getRenyiEfficiency(f"renyi_p={p}_{multiplex_tokeniser.subtokenisers[0].getName()}+{multiplex_tokeniser.subtokenisers[1].getName()}_{corpus.name}", corpus, multiplex_tokeniser)
+            wprint(renyi)
 
-            g.add(LOW_KEY,  p, low)
-            g.add(MID_KEY,  p, mid)
-            g.add(HIGH_KEY, p, high)
+            g.add(LOW_KEY,  t, renyi.efficiency_lower)
+            g.add(MID_KEY,  t, renyi.efficiency_middle)
+            g.add(HIGH_KEY, t, renyi.efficiency_upper)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
         y_lims=(0.30,0.60),
@@ -160,13 +181,12 @@ def searchKudoAlpha(kudo_tokeniser: KudoPieceTokeniser, corpus: NamedIterable[st
             wprint(f"Now testing alpha a={a}...")
             kudo_tokeniser._alpha = a
 
-            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(kudo_tokeniser, corpus)
-            low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
-            wprint(low, mid, high)
+            renyi = getRenyiEfficiency(f"renyi_α={a}_{kudo_tokeniser.getName()}_{corpus.name}", corpus, kudo_tokeniser)
+            wprint(renyi)
 
-            g.add(LOW_KEY,  a, low)
-            g.add(MID_KEY,  a, mid)
-            g.add(HIGH_KEY, a, high)
+            g.add(LOW_KEY,  t, renyi.efficiency_lower)
+            g.add(MID_KEY,  t, renyi.efficiency_middle)
+            g.add(HIGH_KEY, t, renyi.efficiency_upper)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
         y_lims=(0.2,0.5),
@@ -191,13 +211,12 @@ def searchDropout(corpus: NamedIterable[str], dropout_grid: Iterable[float]) -> 
             wprint(f"Now testing dropout p={p}...")
             tk = Factory_BPE(dropout=p).buildTokeniser()
 
-            unigram_distribution, _ = getTokenDistributionFromSentences_and_analyse(tk, corpus)
-            low, mid, high = renyiEfficiency(probabilities=unigram_distribution.values(), alpha=2.5)
-            wprint(low, mid, high)
+            renyi = getRenyiEfficiency(f"renyi_dropout={p}_{tk.getName()}_{corpus.name}", corpus, tk)
+            wprint(renyi)
 
-            g.add(LOW_KEY,  p, low)
-            g.add(MID_KEY,  p, mid)
-            g.add(HIGH_KEY, p, high)
+            g.add(LOW_KEY,  t, renyi.efficiency_lower)
+            g.add(MID_KEY,  t, renyi.efficiency_middle)
+            g.add(HIGH_KEY, t, renyi.efficiency_upper)
 
     g.commitWithArgs(LineGraph.ArgsGlobal(
         y_lims=(0.2,0.5),
