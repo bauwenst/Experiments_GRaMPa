@@ -2,26 +2,28 @@ from scripts.preamble import *
 from scripts.experiments.deberta_hyperparameters import *
 
 from lamoto.training.lineages import *
+from lamoto.training.tuning import *
 from lamoto.tasks import *
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate, TaskWithTypos
 from archit.instantiation.basemodels import DebertaBaseModel
 from archit.instantiation.heads import *
 
 from tktkt.util.timing import Timer
-from tktkt.factories.deserialisation import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
+from tktkt.factories.artifacts import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
 from tktkt.interfaces import Preprocessor, Vocab
 from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser
 
 
+# TODO: These no longer work :(  TkTkT now deals with Specials quite differently.
 class KudoPiece32ki_SlimPajama3M_Old(KudoPiece32ki_SlimPajama3M):
-    def _buildVocabulary(self) -> Vocab:
+    def _getVocabulary(self) -> Vocab:
         return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
                                            existing_types={"<pad>": 0, "<mask>": 1, "<unk>": 2, "<s>": 3, "</s>": 4})
 
 
 class KudoPiece32ki_SlimPajama3M_New(KudoPiece32ki_SlimPajama3M):
-    def _buildVocabulary(self) -> Vocab:
+    def _getVocabulary(self) -> Vocab:
         return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
                                            existing_types=self._specials,
                                            extras_first=False)
@@ -105,10 +107,12 @@ tok_head = TokenClassificationHeadConfig()
 dep_head = DependencyParsingHeadConfig(extended_model_config=PoolingAndStridingConfig(stride=DEBERTA_CONTEXT_LIMIT))
 # - Define tuning metadata
 tuner = TaskTuner(
-    warmup_steps=[50, 100, 500, 1000],
-    effective_batch_sizes=[16, 32, 64, 128, 256, 512],
-    learning_rates=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
-    adamw_decay_rates=[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+    sampling_grid=HyperparameterGrid(
+        warmup_steps=[50, 100, 500, 1000],
+        effective_batch_sizes=[16, 32, 64, 128, 256, 512],
+        learning_rates=[1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
+        adamw_decay_rates=[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+    )
 )
 meta = MetaHyperparameters(
     meta_seed=0,  # This is copied and then altered per lineage and per task, all by the TaskTuner.

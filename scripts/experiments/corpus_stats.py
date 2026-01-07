@@ -2,8 +2,8 @@ from scripts.preamble import *
 
 from tktkt.util.iterables import take, streamProgress
 from tktkt.util.types import NamedIterable
-from tktkt.factories.preprocessing import TraditionalPretokeniser, IdentityMapper, Preprocessor
-from tktkt.interfaces.tokeniser import TokeniserWithFiniteTypeDomain
+from tktkt.factories.preprocessors import TraditionalPretokeniser, IdentityMapper, Preprocessor
+from tktkt.interfaces.tokenisers import TokeniserWithVocabulary
 from tktkt.factories.tokenisers import Factory_SwitchyGrampa_BPE, Factory_KudoPiece, Factory_BPE
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships
 
@@ -15,7 +15,7 @@ CORPUS_ID   = ("allenai/c4", "en")
 CORPUS_SIZE = 2_000
 
 
-def main(tk: TokeniserWithFiniteTypeDomain):
+def main(tk: TokeniserWithVocabulary):
     # Load word isolator
     prep = Preprocessor(IdentityMapper(), IdentityMapper(), TraditionalPretokeniser())
 

@@ -13,15 +13,15 @@ from math import sqrt
 from collections import Counter
 
 from tktkt.interfaces import Preprocessor
-from tktkt.interfaces.tokeniser import Tokeniser
+from tktkt.interfaces.tokenisers import Tokeniser
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
 from tktkt.evaluation.speed import secondsPerTokenisation
-from tktkt.evaluation.fertility import prepareAndCountValidSegmentations
-from tktkt.evaluation.entropy import bitKeyFromTokens, normaliseCounter, analyseSegmentationDistribution
+from tktkt.evaluation.fertility import preprocessThenCountValidSegmentations
+from tktkt.evaluation.entropy import bitKeyFromTokens, normaliseCounter, analyseSegmentationDistribution, SegmentationCounts
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships
-from tktkt.factories.preprocessing import TruncateAndNormalise, TraditionalPretokeniser, IdentityMapper
+from tktkt.factories.preprocessors import TruncateAndNormalise, TraditionalPretokeniser, IdentityMapper
 from tktkt.factories.tokenisers import Factory_BPE
-from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
+from tktkt.factories.artifacts import KudoPiece32ki_SlimPajama3M
 from tktkt.util.printing import wprint
 from tktkt.util.types import NamedIterable
 from tktkt.util.iterables import take, streamProgress
@@ -164,7 +164,7 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_sampl
         for text in streamProgress(take(n_examples, line_iterable), known_size=n_examples):
             for word in pretoken_generator.do(text):
                 for _, tk, prep, is_det, tk_stats in keys_tokenisers_preprocessors_determinism_metrics:
-                    segmentation_distribution = Counter()
+                    segmentation_distribution = SegmentationCounts()
                     for _ in range(n_samples_per_pretoken if not is_det else 1):
                         tokens = tk.prepareAndTokenise(word)
 
@@ -183,12 +183,12 @@ def intrinsicMetrics(line_iterable: NamedIterable[str], n_examples: int, n_sampl
                         # Update segmentation distribution
                         segmentation_distribution[bitKeyFromTokens(tokens)] += 1 if not is_det else n_samples_per_pretoken
 
-                    domain_size, _, _ = prepareAndCountValidSegmentations(word, prep, tk.vocab)
+                    domain_size, _, _ = preprocessThenCountValidSegmentations(word, prep, tk.vocab)
                     if domain_size != 1:  # We are not interested in polluting our averages with data about pretokens whose distribution is always the same regardless of the tokeniser. It is pointless to consider these for comparing tokenisers, and additionally, a distribution with only one value could be seen as both perfectly random and perfectly deterministic at the same time, corresponding to Rényi efficiencies of 1 and 0 respectively. The choice of how to resolve this ambiguity is arbitrary and yet has quite a large effect because 0 and 1 both pull the mean and variance towards extremes.
                         distributional_stats = analyseSegmentationDistribution(
-                            normaliseCounter(segmentation_distribution),
+                            segmentation_distribution,
                             domain_size=domain_size,
-                            sample_size=n_samples_per_pretoken
+                            # sample_size=n_samples_per_pretoken
                         )
                         tk_stats.max_coverage_uniqueness .add(distributional_stats.max_coverage_uniqueness)
                         tk_stats.coverage                .add(distributional_stats.coverage)
@@ -460,7 +460,7 @@ def main2():
     """
     from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
     from tktkt.visualisation.charts.token_distributions import visualiseTypes
-    visualiseTypes([BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])],
+    visualiseTypes([BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M_New()],
                    ["BPE", "ULM"])
 
 
@@ -472,7 +472,7 @@ def main3():
     from tktkt.evaluation.fertility import PossibleSegmentations
     from tktkt.evaluation.observing import ObservableIterable, DataclassObserver
 
-    deserialisers = [BPE32ki_SlimPajama3M(specials=[]), KudoPiece32ki_SlimPajama3M_New(specials=[])]
+    deserialisers = [BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M_New()]
     pretokens = pretokenIterableFromCorpus(loadValidationCorpusAsNamedIterable())
     results = DataclassObserver()
 
@@ -485,7 +485,7 @@ def main3():
             iterable=pretokens,
             observers=[
                 PossibleSegmentations(
-                    effective_preprocessor=d.preprocessorEffective(), vocab=d.buildVocabulary(),
+                    effective_preprocessor=d.preprocessorEffective(), vocab=d.getVocabulary(),
                     do_logarithmic_segmentations=True,
                     observers=[
                         results
@@ -506,8 +506,8 @@ def main4():
     from tktkt.models.random.grampa import GRaMPa
 
     # Import vocab
-    from tktkt.factories.deserialisation import KudoPiece32ki_SlimPajama3M
-    vocab = KudoPiece32ki_SlimPajama3M(specials=[])
+    from tktkt.factories.artifacts import KudoPiece32ki_SlimPajama3M
+    vocab = KudoPiece32ki_SlimPajama3M()
 
     # Test
     slowdownGraph(
@@ -519,12 +519,12 @@ def main4():
             ),
             GRaMPa(
                 preprocessor=vocab.preprocessorEffective(),
-                vocab=vocab.buildVocabulary(),
+                vocab=vocab.getVocabulary(),
                 decode_backwards=False
             ),
             Cognetta(
                 preprocessor=vocab.preprocessorEffective(),
-                vocab=vocab.buildVocabulary()
+                vocab=vocab.getVocabulary()
             )
         ]
     )

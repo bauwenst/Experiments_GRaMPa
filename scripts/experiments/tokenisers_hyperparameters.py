@@ -9,17 +9,17 @@ from typing import Iterable, Tuple, Iterator, Set
 import numpy as np
 from math import log2
 
-from tktkt.factories.evaluation import evaluateTokeniser
+from tktkt.factories.evaluators import evaluateTokeniser
 from tktkt.evaluation.observing import FutureObserver
 from tktkt.evaluation.entropy import TokenUnigramDistribution, ReturnRenyiEfficiencyWithBounds, RenyiEfficiencyWithBounds
 from tktkt.evaluation.compare import ExactMatches
 from tktkt.evaluation.fertility import countValidSegmentations
-from tktkt.interfaces import Deserialiser
+from tktkt.interfaces import Artifacts
 from tktkt.visualisation.charts.token_distributions import visualiseCharsVersusTokensRelationships, visualiseSingleWordSegmentationDistribution
 from tktkt.models.random.grampa import PowerNormalisation, GRaMPa
 from tktkt.models.kudopiece.segmentation import KudoPieceTokeniser
 from tktkt.wrappers.multiplexing import StochasticTokeniserSwitch
-from tktkt.factories.preprocessing import TraditionalPreprocessor
+from tktkt.factories.preprocessors import TraditionalPreprocessor
 from tktkt.factories.tokenisers import Factory_GRaMPa
 from tktkt.util.types import NamedIterable, T
 from tktkt.util.printing import wprint
@@ -92,7 +92,7 @@ class MicroAverage:
 ################################################################################################
 
 
-def getRenyiEfficiency(id: str, corpus: NamedIterable[str], tokeniser: TokeniserWithFiniteTypeDomain) -> ReturnRenyiEfficiencyWithBounds:
+def getRenyiEfficiency(id: str, corpus: NamedIterable[str], tokeniser: TokeniserWithVocabulary) -> ReturnRenyiEfficiencyWithBounds:
     future = FutureObserver()
     evaluateTokeniser(
         experiment_id=id,
@@ -431,9 +431,9 @@ def main_vocabsize():
     g_max   = LineGraph(f"vocabsize-vs-fertility_max_{corpus_of_words.name}-{STEP}", caching=CacheMode.IF_MISSING)
     if g_paper.needs_computation or g_max.needs_computation:
         for vocab, name in [(bpe_vocab, "BPE"), (kudo_vocab_new, "ULM")]:
-            vocab: Deserialiser
+            vocab: Artifacts
             preprocessor = vocab.preprocessorEffective()
-            vocab_as_dict = vocab.buildVocabulary()
+            vocab_as_dict = vocab.getVocabulary()
             ordered_vocab = OrderedSet(sorted(vocab_as_dict, key=lambda t: (len(t) != 1, vocab_as_dict[t]) ))  # For the alphabet, you get something of the form (False, ...) which is sorted before any (True, ...).
 
             sizes = range(len(ordered_vocab), STEP-1, -STEP)
@@ -522,7 +522,7 @@ def main_compareBPE():
         wprint(f"Comparing to BPE p={p}...")
         stochastic = Factory_BPE(dropout=p).buildTokeniser()
         ratio, _, _ = metric.compare(deterministic, stochastic)
-        g.add(f"$|V| = {deterministic.getVocabSize()}$", p, 1-ratio)
+        g.add(f"$|V| = {deterministic.vocab.size()}$", p, 1-ratio)
 
     g.commitWithArgs(
         LineGraph.ArgsGlobal(
@@ -556,7 +556,7 @@ def main_compareULM():
             wprint(f"Comparing to ULM a={a}...")
             stochastic = Factory_KudoPiece(kbest=64, alpha=a).buildTokeniser()
             ratio, _, _ = metric.compare(deterministic, stochastic)
-            g.add(f"$|V| = {deterministic.getVocabSize()}$", a, 1-ratio)
+            g.add(f"$|V| = {deterministic.vocab.size()}$", a, 1-ratio)
 
     g.commitWithArgs(
         LineGraph.ArgsGlobal(
