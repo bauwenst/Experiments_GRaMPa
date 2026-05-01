@@ -8,7 +8,7 @@ from fiject import setFijectOutputFolder
 setFijectOutputFolder(PATH_DATA_OUT)
 
 from tktkt import setTkTkToutputRoot
-from tktkt.paths import PathManager
-
 setTkTkToutputRoot(PATH_DATA_OUT)
-LamotoPaths = PathManager("lamoto")
+
+from lamoto.training.training import LamotoPaths
+from tktkt.util.environment import is_cluster

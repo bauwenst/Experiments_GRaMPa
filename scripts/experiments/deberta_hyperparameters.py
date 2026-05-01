@@ -6,11 +6,10 @@ from typing import Type
 from transformers import DebertaConfig, DebertaForMaskedLM
 from transformers import AutoTokenizer
 
-from lamoto.tasks import MlmHyperparameters, SUGGESTED_HYPERPARAMETERS_MLM
-from lamoto.training.auxiliary.hyperparameters import getDefaultHyperparameters, Intervals, EveryNDescents, AfterNDescents
+from lamoto.tasks import MlmHyperparameters, MLM
+from lamoto.training.auxiliary.hyperparameters import Intervals, EveryNDescents, AfterNDescents
 from lamoto.training.lineages import SerialisedTokeniser, ConfigFactory, BaseModel
 from archit.instantiation.heads import MaskedLMHeadConfig
-from tktkt.util.environment import IS_NOT_LINUX
 
 
 class DebertaConfigFactory(ConfigFactory):
@@ -32,7 +31,7 @@ class DebertaConfigFactory(ConfigFactory):
 
 
 def getPretrainingHyperparameters() -> MlmHyperparameters:
-    hp = SUGGESTED_HYPERPARAMETERS_MLM.copy()
+    hp = MLM.getDefaultHyperparameters()
     hp.SEED = 69420
     hp.store_in_hf_cache = True
 
@@ -47,7 +46,7 @@ def getPretrainingHyperparameters() -> MlmHyperparameters:
     hp.archit_head_config = MaskedLMHeadConfig()
 
     # Device-specific
-    if IS_NOT_LINUX:
+    if not is_cluster():
         hp.EXAMPLES_PER_DEVICEBATCH = 2
     else:
         hp.WANDB_PROJECT = WANDB_PROJECT

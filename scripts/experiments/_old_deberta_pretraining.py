@@ -10,7 +10,6 @@ from lamoto.tasks import MLM_SlimPajama, SUGGESTED_HYPERPARAMETERS_MLM
 from lamoto.tasks.mlm import MaskedLMHeadConfig, MLM_C4
 from lamoto.training.auxiliary.hyperparameters import Intervals, EveryNMinutes, EveryNDescents, AfterNDescents
 from lamoto.augmenting.augment_dataset import TaskWithAugmentedDataset, Truncate
-from tktkt.util.environment import IS_NOT_LINUX
 from tktkt.interfaces.huggingface import TktktToHuggingFace
 
 
@@ -49,7 +48,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
     hp.TOKENISER = tk
 
     # Device-specific
-    if IS_NOT_LINUX:
+    if not is_cluster():
         hp.EXAMPLES_PER_DEVICEBATCH = 2
     else:
         hp.WANDB_PROJECT = WANDB_PROJECT
@@ -73,7 +72,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
     )
 
     ###
-    if IS_NOT_LINUX:  # SlimPajama takes too long to get a stream for
+    if not is_cluster():  # SlimPajama takes too long to get a stream for
         task = MLM_C4(packing=True)
     else:
         task = MLM_SlimPajama(packing=True)
@@ -84,7 +83,7 @@ def deberta_pretraining(tk: PreTrainedTokenizerBase, tk_name: str, low_resource:
 
 
 if __name__ == "__main__":
-    if IS_NOT_LINUX:
+    if not is_cluster():
         model_id = 1
         low_res = True
         continue_from = None

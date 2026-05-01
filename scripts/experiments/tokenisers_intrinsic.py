@@ -3,7 +3,7 @@ Tests to do with fertility and speed, metrics inherent to the tokeniser itself r
 WITHOUT changing any hyperparameters.
 """
 from scripts.preamble import *
-from scripts.experiments.tokenisers_training import loadCorpus, IS_NOT_LINUX, CORPUS_ID
+from scripts.experiments.tokenisers_training import loadCorpus, CORPUS_ID
 from scripts.experiments.lineages import getTokeniserFactories
 from scripts.visualisation.table_instances import GRaMPaFinetuningParser, GRaMPaRowKey, VOCABS
 
@@ -449,8 +449,8 @@ def main1():
     """
     intrinsicMetrics(
         loadValidationCorpusAsNamedIterable(),
-        n_examples=9 if IS_NOT_LINUX else 2_000,
-        n_samples_per_pretoken=10 if IS_NOT_LINUX else 100
+        n_examples=9 if not is_cluster() else 2_000,
+        n_samples_per_pretoken=10 if not is_cluster() else 100
     )
 
 
@@ -458,9 +458,9 @@ def main2():
     """
     Generate histogram of vocabulary type lengths.
     """
-    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
+    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
     from tktkt.visualisation.charts.token_distributions import visualiseTypes
-    visualiseTypes([BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M_New()],
+    visualiseTypes([BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M()],
                    ["BPE", "ULM"])
 
 
@@ -468,11 +468,11 @@ def main3():
     """
     For each of the vocabularies, generate hypothetical vocabulary fertility stats across the project corpus.
     """
-    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M_New
+    from scripts.experiments.lineages import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
     from tktkt.evaluation.fertility import PossibleSegmentations
     from tktkt.evaluation.observing import ObservableIterable, DataclassObserver
 
-    deserialisers = [BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M_New()]
+    deserialisers = [BPE32ki_SlimPajama3M(), KudoPiece32ki_SlimPajama3M()]
     pretokens = pretokenIterableFromCorpus(loadValidationCorpusAsNamedIterable())
     results = DataclassObserver()
 
@@ -512,7 +512,7 @@ def main4():
     # Test
     slowdownGraph(
         loadValidationCorpusAsNamedIterable(),
-        n_examples=1000 if IS_NOT_LINUX else 20_000,
+        n_examples=1000 if not is_cluster() else 20_000,
         tokenisers=[
             IdentityTokeniser(
                 preprocessor=vocab.preprocessorEffective()

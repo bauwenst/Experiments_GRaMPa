@@ -6,7 +6,6 @@ from typing import Set, Tuple
 from transformers import PreTrainedTokenizerBase
 
 from tktkt.interfaces.huggingface import TktktToHuggingFace
-from tktkt.util.environment import IS_NOT_LINUX
 from archit.instantiation.heads import TokenClassificationHeadConfig, SequenceClassificationHeadConfig, DependencyParsingHeadConfig
 from archit.instantiation.extensions import PoolingAndStridingConfig
 from archit.instantiation.abstracts import HeadConfig
@@ -33,7 +32,7 @@ def deberta_finetuning(deberta_checkpoint: str, tokeniser: PreTrainedTokenizerBa
     hp.MODEL_CONFIG_OR_CHECKPOINT = deberta_checkpoint
     hp.TOKENISER = tokeniser
     hp.SAVE_AS = "deberta" + "-" + tk_name
-    if IS_NOT_LINUX:
+    if not is_cluster():
         hp.EXAMPLES_PER_DEVICEBATCH = 16
     else:
         hp.WANDB_PROJECT = WANDB_PROJECT
@@ -113,7 +112,7 @@ if __name__ == "__main__":
     hp.EVALS_OF_PATIENCE = 5
     hp.archit_basemodel_class = DebertaBaseModel
 
-    if IS_NOT_LINUX:
+    if not is_cluster():
         checkpoint = (LamotoPaths.pathToCheckpoints() / "deberta-BPE-dropout_low_MLM_2024-10-15_02-33-44" / "checkpoint-512").as_posix()
         n_samples = 3
         max_batches_at_bs32 = 128

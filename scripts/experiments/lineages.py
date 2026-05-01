@@ -11,22 +11,8 @@ from archit.instantiation.heads import *
 from tktkt.util.timing import Timer
 from tktkt.factories.artifacts import BPE32ki_SlimPajama3M, KudoPiece32ki_SlimPajama3M
 from tktkt.factories.tokenisers import Factory_BPE, Factory_KudoPiece, Factory_SwitchyGrampa_BPE, Factory_SwitchyGrampa_ULM
-from tktkt.interfaces import Preprocessor, Vocab
-from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser
-
-
-# TODO: These no longer work :(  TkTkT now deals with Specials quite differently.
-class KudoPiece32ki_SlimPajama3M_Old(KudoPiece32ki_SlimPajama3M):
-    def _getVocabulary(self) -> Vocab:
-        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
-                                           existing_types={"<pad>": 0, "<mask>": 1, "<unk>": 2, "<s>": 3, "</s>": 4})
-
-
-class KudoPiece32ki_SlimPajama3M_New(KudoPiece32ki_SlimPajama3M):
-    def _getVocabulary(self) -> Vocab:
-        return KudoPieceVocabulariser.load(file_or_folder=self.getVocabFile(),
-                                           existing_types=self._specials,
-                                           extras_first=False)
+from tktkt.factories.specials import RobertaSpecials
+from tktkt.interfaces.identifiers import SpecialsExtended
 
 
 t = Timer()
@@ -41,8 +27,9 @@ t.start(echo=True)
 #       - BPE's specials: <s>: 0, </s>: 1, <unk>: 2, <pad>: 3, <mask>: 4
 #       - ULM's specials: <s>: 32765, </s>: 32766, <unk>: 32767, <pad>: 32768, <mask>: 32769
 bpe_vocab  = BPE32ki_SlimPajama3M()
-kudo_vocab_old = KudoPiece32ki_SlimPajama3M_Old()
-kudo_vocab_new = KudoPiece32ki_SlimPajama3M_New()
+kudo_vocab = KudoPiece32ki_SlimPajama3M()
+kudo_specials_old = SpecialsExtended(RobertaSpecials(PAD=0, MASK=1, BOS=3, EOS=4), unk=2)
+kudo_specials_new = SpecialsExtended(RobertaSpecials(BOS=32765, EOS=32766, PAD=32768, MASK=32769), unk=32767)
 
 # Define the 14 lineages
 prefix = "deberta-"
@@ -51,7 +38,7 @@ root1 = LineageRootNode(prefix + "BPE-dropout-0.1",
                         tokeniser=Factory_BPE(files=bpe_vocab, dropout=0.1))
 root2 = LineageRootNode(prefix + "ULM-64-0.15",
                         DebertaConfigFactory(), DebertaBaseModel,
-                        tokeniser=Factory_KudoPiece(files=kudo_vocab_old, kbest=64, alpha=0.15))
+                        tokeniser=Factory_KudoPiece(files=kudo_vocab, specials=kudo_specials_old, kbest=64, alpha=0.15))
 root3 = LineageRootNode(prefix + "BPE+GRaMPa(t=+1.0,l=2)",
                         DebertaConfigFactory(), DebertaBaseModel,
                         tokeniser=Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+1.0, l_min=2))
@@ -63,13 +50,13 @@ root5 = LineageRootNode(prefix + "BPE+GRaMPa(t=-10.0,l=2)",
                         tokeniser=Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=-10.0, l_min=2))
 root6 = LineageRootNode(prefix + "ULM+GRaMPa(t=+1.0,l=2)",
                         DebertaConfigFactory(), base_model=DebertaBaseModel,
-                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=+1.0, l_min=2))
+                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_old, p=0.5, temperature=+1.0, l_min=2))
 root7 = LineageRootNode(prefix + "ULM+GRaMPa(t=+5.0,l=2)",
                         DebertaConfigFactory(), base_model=DebertaBaseModel,
-                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=+5.0, l_min=2))
+                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_old, p=0.5, temperature=+5.0, l_min=2))
 root8 = LineageRootNode(prefix + "ULM+GRaMPa(t=-10.0,l=2)",
                         DebertaConfigFactory(), base_model=DebertaBaseModel,
-                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_old, p=0.5, temperature=-10.0, l_min=2))
+                        tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_old, p=0.5, temperature=-10.0, l_min=2))
 root9 = LineageRootNode(prefix + "BPE+GRaMPa(t=+1.0,l=1)",
                         DebertaConfigFactory(), base_model=DebertaBaseModel,
                         tokeniser=Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=+1.0, l_min=1))
@@ -81,13 +68,13 @@ root11 = LineageRootNode(prefix + "BPE+GRaMPa(t=-10.0,l=1)",
                          tokeniser=Factory_SwitchyGrampa_BPE(files=bpe_vocab, p=0.5, temperature=-10.0, l_min=1))
 root12 = LineageRootNode(prefix + "ULM+GRaMPa(t=+1.0,l=1)",
                          DebertaConfigFactory(), base_model=DebertaBaseModel,
-                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=+1.0, l_min=1))
+                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_new, p=0.5, temperature=+1.0, l_min=1))
 root13 = LineageRootNode(prefix + "ULM+GRaMPa(t=+5.0,l=1)",
                          DebertaConfigFactory(), base_model=DebertaBaseModel,
-                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=+5.0, l_min=1))
+                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_new, p=0.5, temperature=+5.0, l_min=1))
 root14 = LineageRootNode(prefix + "ULM+GRaMPa(t=-10.0,l=1)",
                          DebertaConfigFactory(), base_model=DebertaBaseModel,
-                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab_new, p=0.5, temperature=-10.0, l_min=1))
+                         tokeniser=Factory_SwitchyGrampa_ULM(files=kudo_vocab, specials=kudo_specials_new, p=0.5, temperature=-10.0, l_min=1))
 
 tree = LineagePlaceholderNode()
 
@@ -95,7 +82,7 @@ tree = LineagePlaceholderNode()
 mlm = tree.next(
     TrainingNode("mlm",
         hp=getPretrainingHyperparameters(), trainer=TaskTrainer(),
-        task=TaskWithAugmentedDataset(MLM_SlimPajama(packing=True, use_pppl=False),
+        task=TaskWithAugmentedDataset(MLM(SlimPajama("English"), packing=True, use_perplexity=False),
                                       augmentation=Truncate(max_examples=50_000), splits={"train"})
     )
 )
@@ -125,8 +112,8 @@ meta = MetaHyperparameters(
     minmax_evals_phase_2=32         # Eval every 512 batches at batch size 32 (which has 16384 batches, so 16384/32 = 512).
 )
 # - Define hyperparameters
-hp = getDefaultHyperparameters()
-if IS_NOT_LINUX:
+hp = POS.getDefaultHyperparameters()
+if not is_cluster():
     hp.EXAMPLES_PER_DEVICEBATCH = 16
 else:
     hp.WANDB_PROJECT = WANDB_PROJECT

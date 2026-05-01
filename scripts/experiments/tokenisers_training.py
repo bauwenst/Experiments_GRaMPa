@@ -8,7 +8,6 @@ from tktkt.models.kudopiece.vocabularisation import KudoPieceVocabulariser, Kudo
 from tktkt.factories.preprocessors import ModernEnglishPreprocessor_ByteCompatible, \
     SentencePiecePreprocessor_SpaceConcatenable, RobertaSpaceMarker
 from tktkt.util.timing import datetimeDashed
-from tktkt.util.environment import IS_NOT_LINUX
 
 
 TRUNCATE_INPUT_AFTER = 8192

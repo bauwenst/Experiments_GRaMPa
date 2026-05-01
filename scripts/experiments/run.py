@@ -1,7 +1,7 @@
 if __name__ == "__main__":
-    from tktkt.util.environment import IS_NOT_LINUX
+    from tktkt.util.environment import is_cluster
 
-    if IS_NOT_LINUX:
+    if not is_cluster():
         from scripts.experiments.lineages import LINEAGES
 
         print("Commands:")

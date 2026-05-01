@@ -23,7 +23,6 @@ from tktkt.factories.preprocessors import TraditionalPreprocessor
 from tktkt.factories.tokenisers import Factory_GRaMPa
 from tktkt.util.types import NamedIterable, T
 from tktkt.util.printing import wprint
-from tktkt.util.environment import IS_NOT_LINUX
 from tktkt.util.iterables import streamProgress
 
 from fiject import LineGraph, CacheMode, StreamingMultiHistogram, BinSpec
@@ -603,7 +602,7 @@ def main_compareChosenBPEandULM():
 
 
 if __name__ == "__main__":
-    if IS_NOT_LINUX:
+    if not is_cluster():
         # main_compareBPE()
         # main_compareULM()
         # intrinsicsVersusTemperature_word("antidisestablishmentarianism", unconstrained=True)
